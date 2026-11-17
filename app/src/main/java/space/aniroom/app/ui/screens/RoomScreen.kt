@@ -438,6 +438,7 @@ private fun PlayerArea(
             )
         }
 
+        ActionBanners(vm, isFull, Modifier.fillMaxSize())
         PlayerToastLayer(vm, Modifier.align(Alignment.TopCenter).padding(top = if (isFull) 64.dp else 52.dp))
 
         if (isFull) {
@@ -703,7 +704,8 @@ private fun BurstLayer(vm: RoomViewModel, modifier: Modifier) {
 
 @Composable
 private fun PlayerToastLayer(vm: RoomViewModel, modifier: Modifier) {
-    val toast by vm.toast.collectAsState()
+    val all by vm.toast.collectAsState()
+    val toast = all as? PlayerToast.Info
     val m = Manga.colors
     AnimatedContent(
         toast,
@@ -714,26 +716,9 @@ private fun PlayerToastLayer(vm: RoomViewModel, modifier: Modifier) {
     ) { t ->
         if (t != null) MangaPanel(color = m.paper2, shadow = 3.dp, radius = 14.dp) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                when (t) {
-                    is PlayerToast.Skip -> {
-                        Text("⏭", fontSize = 16.sp)
-                        Spacer(Modifier.width(6.dp))
-                        Text("${t.by} пропустил опенинг" + (t.seconds?.let { " · ${it.toInt()} с" } ?: ""), color = m.ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
-                    is PlayerToast.Episode -> {
-                        Text(if (t.loading) "⏳" else "📺", fontSize = 16.sp)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (t.from != null && t.to != null) "Серия ${t.from} → ${t.to}" else "Серия ${t.to ?: ""}",
-                            color = m.ink, fontFamily = DisplayFont, fontSize = 13.sp,
-                        )
-                    }
-                    is PlayerToast.Info -> {
-                        Text(t.emoji, fontSize = 15.sp, color = m.red, fontWeight = FontWeight.Black)
-                        Spacer(Modifier.width(6.dp))
-                        Text(t.text, color = m.ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2)
-                    }
-                }
+                Text(t.emoji, fontSize = 15.sp, color = m.red, fontWeight = FontWeight.Black)
+                Spacer(Modifier.width(6.dp))
+                Text(t.text, color = m.ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2)
             }
         } else Spacer(Modifier.height(1.dp))
     }

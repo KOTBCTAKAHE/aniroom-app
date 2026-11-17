@@ -84,7 +84,7 @@ data class EndCard(val episode: Int, val isLast: Boolean, val dismissed: Boolean
 sealed interface PlayerToast {
     val id: Long
     data class Skip(override val id: Long, val by: String, val seconds: Double?) : PlayerToast
-    data class Episode(override val id: Long, val from: Int?, val to: Int?, val loading: Boolean) : PlayerToast
+    data class Episode(override val id: Long, val from: Int?, val to: Int?, val loading: Boolean, val title: String? = null) : PlayerToast
     data class Info(override val id: Long, val text: String, val emoji: String = "✦") : PlayerToast
 }
 
@@ -521,7 +521,7 @@ class RoomViewModel(app: Application, val roomCode: String) : AndroidViewModel(a
             _ui.update { it.copy(watched = anime?.shikimoriId?.let(Session::watchedEpisodes) ?: emptySet(), ratings = null) }
             loadExtras()
         } else if (anime != null && previousEpisode != null && previousEpisode != anime.episode && anime.episode > 0) {
-            showToast(PlayerToast.Episode(System.nanoTime(), previousEpisode, anime.episode, false))
+            showToast(PlayerToast.Episode(System.nanoTime(), previousEpisode, anime.episode, false, anime.title))
         }
         ensureSource(payload.videoUrl)
         applySync()
