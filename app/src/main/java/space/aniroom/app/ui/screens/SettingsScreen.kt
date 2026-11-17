@@ -727,6 +727,9 @@ private fun PlayerSection() {
         SwitchRow("Пропускать опенинг сам", "Когда ты хост — прыжок через опенинг за всех", prefs.autoSkipOpening) { v -> Session.updatePrefs { it.copy(autoSkipOpening = v) }; UserHub.syncPrefs() }
         SwitchRow("Реакции поверх видео", "Летящие 🔥 и 😂 от остальных зрителей", prefs.reactions) { v -> Session.updatePrefs { it.copy(reactions = v) }; UserHub.syncPrefs() }
         SwitchRow("Картинка в картинке", "Свернул приложение — видео продолжается в окошке", prefs.autoPip) { v -> Session.updatePrefs { it.copy(autoPip = v) } }
+        SwitchRow("Подсветка вокруг видео", "В полном экране чёрные поля светятся цветами кадра, как в YouTube", prefs.ambient) { v -> Session.updatePrefs { it.copy(ambient = v) } }
+        Text("Картинка в полном экране", color = Manga.colors.ink, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+        Segmented(listOf("fit" to "Вписать", "fill" to "Заполнить", "stretch" to "Растянуть"), prefs.videoFit) { v -> Session.updatePrefs { it.copy(videoFit = v) } }
         SwitchRow("Жесты в плеере", "Свайп слева — яркость, справа — громкость (в полноэкранном)", prefs.gestures) { v -> Session.updatePrefs { it.copy(gestures = v) } }
     }
     Card("Любимая озвучка", "При выборе тайтла она будет отмечена первой.") {

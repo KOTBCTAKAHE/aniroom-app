@@ -27,6 +27,8 @@ data class AppPrefs(
     val clipboardHints: Boolean = true,
     val achievementSound: Boolean = true,
     val chatSound: Boolean = true,
+    val videoFit: String = "fit",
+    val ambient: Boolean = true,
 )
 
 /** Token, cached user and device prefs. SharedPreferences keeps startup instant. */
@@ -65,6 +67,8 @@ object Session {
             clipboardHints = prefs.getBoolean("clipboardHints", true),
             achievementSound = prefs.getBoolean("achievementSound", true),
             chatSound = prefs.getBoolean("chatSound", true),
+            videoFit = prefs.getString("videoFit", "fit") ?: "fit",
+            ambient = prefs.getBoolean("ambient", true),
         )
     }
 
@@ -106,6 +110,8 @@ object Session {
             .putBoolean("clipboardHints", p.clipboardHints)
             .putBoolean("achievementSound", p.achievementSound)
             .putBoolean("chatSound", p.chatSound)
+            .putString("videoFit", p.videoFit)
+            .putBoolean("ambient", p.ambient)
             .apply()
     }
 

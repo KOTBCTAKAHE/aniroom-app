@@ -140,6 +140,13 @@ import space.aniroom.app.ui.theme.Kicker
 import space.aniroom.app.ui.theme.Manga
 import space.aniroom.app.util.PipState
 import space.aniroom.app.util.RoomLinks
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Crop169
+import androidx.compose.material.icons.rounded.FitScreen
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
@@ -309,22 +316,27 @@ fun RoomScreen(code: String, onBack: () -> Unit, openUser: (Int) -> Unit) {
 // --------------------------------------------------------------------------------------- player
 
 @Composable
-private fun PlayerSurface(vm: RoomViewModel, modifier: Modifier) {
+private fun PlayerSurface(
+    vm: RoomViewModel,
+    modifier: Modifier,
+    resizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT,
+    onTexture: (android.view.TextureView?) -> Unit = {},
+) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            PlayerView(ctx).apply {
+            (android.view.LayoutInflater.from(ctx).inflate(space.aniroom.app.R.layout.player_texture, null) as PlayerView).apply {
                 layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                setKeepContentOnPlayerReset(true)
-                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                this.resizeMode = resizeMode
                 player = vm.player
+                onTexture(videoSurfaceView as? android.view.TextureView)
             }
         },
-        update = { it.player = vm.player },
-        onRelease = { it.player = null },
+        update = {
+            it.player = vm.player
+            if (it.resizeMode != resizeMode) it.resizeMode = resizeMode
+        },
+        onRelease = { it.player = null; onTexture(null) },
     )
 }
 
@@ -367,9 +379,25 @@ private fun PlayerArea(
         Toast.makeText(context, "Плеером управляет хост", Toast.LENGTH_SHORT).show()
     }
 
+    val prefs by Session.appPrefs.collectAsState()
+    var texture by remember { mutableStateOf<android.view.TextureView?>(null) }
+    val fitMode = if (isFull) prefs.videoFit else "fit"
+    val resize = when (fitMode) {
+        "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    }
+    fun setFit(mode: String) {
+        if (mode == prefs.videoFit) return
+        Session.updatePrefs { it.copy(videoFit = mode) }
+        haptic(false)
+        vm.showToast(PlayerToast.Info(System.nanoTime(), when (mode) { "fill" -> "Заполнить экран"; "stretch" -> "Растянуть"; else -> "Вписать целиком" }, "⛶"), 1400)
+    }
+
     BoxWithConstraints(modifier.background(Color.Black)) {
         val widthPx = constraints.maxWidth.toFloat()
-        PlayerSurface(vm, Modifier.fillMaxSize())
+        if (isFull && hasSource && prefs.ambient && fitMode == "fit") AmbientGlow(texture, vm, Modifier.fillMaxSize())
+        PlayerSurface(vm, Modifier.fillMaxSize(), resize) { texture = it }
 
         // Gestures: tap toggles controls, double-tap seeks (host).
         val tapGestures = Modifier.pointerInput(owner) {
@@ -384,8 +412,26 @@ private fun PlayerArea(
                 },
             )
         }
-        if (isFull && Session.appPrefs.collectAsState().value.gestures) SwipeAdjustLayer(Modifier.fillMaxSize(), tapGestures)
-        else Box(Modifier.fillMaxSize().then(tapGestures))
+        val pinch = if (isFull) Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                var zoom = 1f
+                var multi = false
+                do {
+                    val event = awaitPointerEvent()
+                    if (event.changes.count { it.pressed } >= 2) {
+                        multi = true
+                        zoom *= event.calculateZoom()
+                        event.changes.forEach { it.consume() }
+                    }
+                } while (event.changes.any { it.pressed })
+                if (multi) {
+                    if (zoom > 1.12f) setFit("fill") else if (zoom < 0.9f) setFit("fit")
+                }
+            }
+        } else Modifier
+        if (isFull && prefs.gestures) SwipeAdjustLayer(Modifier.fillMaxSize(), pinch.then(tapGestures))
+        else Box(Modifier.fillMaxSize().then(pinch).then(tapGestures))
 
         FlyingLayer(vm, Modifier.fillMaxSize())
         BurstLayer(vm, Modifier.align(Alignment.Center))
@@ -481,6 +527,10 @@ private fun PlayerArea(
                         )
                         SpeedMenu(vm, progress)
                         QualityMenu(vm, progress)
+                        if (isFull) OverlayButton(
+                            when (prefs.videoFit) { "fill" -> Icons.Rounded.FitScreen; "stretch" -> Icons.Rounded.AspectRatio; else -> Icons.Rounded.Crop169 },
+                            "Размер картинки",
+                        ) { setFit(when (prefs.videoFit) { "fit" -> "fill"; "fill" -> "stretch"; else -> "fit" }) }
                         if (isFull) Box {
                             OverlayButton(Icons.AutoMirrored.Rounded.Chat, "Чат") { chatOpen = !chatOpen }
                             if (chatUnread > 0 && !chatOpen) Box(
@@ -1248,5 +1298,53 @@ private fun SwipeAdjustLayer(modifier: Modifier, tapGestures: Modifier) {
                 Text("${(value * 100).roundToInt()}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
+    }
+}
+
+/**
+ * YouTube-style ambient mode: a tiny, constantly refreshed copy of the current frame is
+ * stretched and blurred behind the video, so the side bars glow with the scene's colours
+ * instead of staying black.
+ */
+@Composable
+private fun AmbientGlow(texture: android.view.TextureView?, vm: RoomViewModel, modifier: Modifier) {
+    var current by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var previous by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val fade = remember { Animatable(1f) }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(texture) {
+        while (true) {
+            val tv = texture
+            if (tv != null && tv.isAvailable && vm.player.videoSize.width > 0) {
+                val frame = runCatching { tv.getBitmap(32, 18) }.getOrNull()
+                if (frame != null) {
+                    previous = current
+                    current = frame.asImageBitmap()
+                    if (appear.value < 1f) launch { appear.animateTo(1f, tween(900)) }
+                    fade.snapTo(0f)
+                    fade.animateTo(1f, tween(420))
+                }
+            }
+            delay(if (vm.player.isPlaying) 350 else 1200)
+        }
+    }
+    Box(modifier.graphicsLayer { alpha = appear.value }) {
+        val blur = if (android.os.Build.VERSION.SDK_INT >= 31) Modifier.blur(48.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle) else Modifier
+        previous?.let {
+            androidx.compose.foundation.Image(it, null, contentScale = androidx.compose.ui.layout.ContentScale.FillBounds, modifier = Modifier.fillMaxSize().then(blur))
+        }
+        current?.let {
+            androidx.compose.foundation.Image(
+                it, null, contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize().then(blur).graphicsLayer { alpha = fade.value },
+            )
+        }
+        // keep it a soft glow, a bit darker toward the screen edges
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)))
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.55f), 0.18f to Color.Transparent, 0.82f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f)),
+            ),
+        )
     }
 }
