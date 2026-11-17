@@ -140,6 +140,13 @@ import space.aniroom.app.ui.theme.Kicker
 import space.aniroom.app.ui.theme.Manga
 import space.aniroom.app.util.PipState
 import space.aniroom.app.util.RoomLinks
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.Close
@@ -404,94 +411,12 @@ private fun PlayerArea(
             progress.buffering -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(46.dp), color = m.red, strokeWidth = 4.dp)
         }
 
-        // Owner paused banner for viewers
-        AnimatedVisibility(
-            ui.ownerPaused && hasSource && loadingInfo == null,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(spring(dampingRatio = 0.5f)) + fadeIn(), exit = scaleOut() + fadeOut(),
-        ) {
-            val hostName = ui.participants.firstOrNull { it.isOwner }?.username ?: "Хост"
-            MangaPanel(Modifier.rotate(-2f), color = m.yellow, shadow = 4.dp) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Pause, null, tint = m.onYellow)
-                    Spacer(Modifier.width(6.dp))
-                    Text("$hostName на паузе", color = m.onYellow, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // Controls overlay
-        AnimatedVisibility(controls, enter = fadeIn(tween(180)), exit = fadeOut(tween(250)), modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxWidth().height(90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent))))
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(110.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))))
-                // top bar
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp).then(if (isFull) Modifier.statusBarsPadding() else Modifier),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OverlayButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
-                    Spacer(Modifier.width(6.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(anime?.title ?: room.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
-                        val sub = listOfNotNull(
-                            anime?.episode?.takeIf { it > 0 }?.let { "Серия $it" + ((anime?.episodesTotal ?: 0).takeIf { t -> t > 0 }?.let { t -> " из $t" } ?: "") },
-                            anime?.translationName,
-                        ).joinToString(" · ")
-                        if (sub.isNotEmpty()) Text(sub, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
-                    }
-                    SyncBadge(ui, owner) { vm.syncToHost() }
-                    if (PipState.supported(LocalContext.current)) {
-                        Spacer(Modifier.width(4.dp))
-                        OverlayButton(Icons.Rounded.PictureInPictureAlt, "Картинка в картинке") { PipState.enter(context.findActivity(), progress.isPlaying, owner) }
-                    }
-                }
-                // center play/pause
-                if (hasSource && ui.animeLoading == null && !progress.buffering) {
-                    val playing = progress.isPlaying || (vm.player.playWhenReady && !owner)
-                    Box(
-                        Modifier
-                            .align(Alignment.Center)
-                            .size(if (isFull) 74.dp else 62.dp)
-                            .clip(CircleShape)
-                            .background(m.red.copy(alpha = 0.92f))
-                            .border(3.dp, Color.Black, CircleShape)
-                            .clickable {
-                                haptic(false)
-                                if (!vm.togglePlay()) {
-                                    if (ui.sync?.playing == true && !progress.isPlaying) vm.syncToHost() else denied()
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AnimatedContent(playing, transitionSpec = { scaleIn() + fadeIn() togetherWith scaleOut() + fadeOut() }, label = "pp") { p ->
-                            Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Пауза" else "Play", tint = Color.White, modifier = Modifier.size(36.dp))
-                        }
-                    }
-                }
-                // bottom bar
-                Column(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 4.dp)
-                        .then(if (isFull) Modifier.navigationBarsPadding() else Modifier),
-                ) {
-                    SeekBar(vm, progress, owner, ::denied)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "${formatTime(progress.positionSec)} / ${formatTime(progress.durationSec)}",
-                            color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
-                        )
-                        SpeedMenu(vm, progress)
-                        QualityMenu(vm, progress)
-                        if (isFull) Box {
-                            OverlayButton(Icons.AutoMirrored.Rounded.Chat, "Чат") { chatOpen = !chatOpen }
-                            if (chatUnread > 0 && !chatOpen) Box(
-                                Modifier.align(Alignment.TopEnd).clip(CircleShape).background(m.red).padding(horizontal = 5.dp),
-                            ) { Text(if (chatUnread > 9) "9+" else "$chatUnread", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                        }
-                        OverlayButton(if (isFull) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Во весь экран", onToggleFull)
-                    }
-                }
-            }
+        // Manga pause screen (same as the site): whenever the video stands still
+        val pausedNow = hasSource && loadingInfo == null && !progress.buffering && !progress.isPlaying &&
+            !vm.player.playWhenReady && progress.durationSec > 0
+        AnimatedVisibility(pausedNow, enter = fadeIn(tween(250)), exit = fadeOut(tween(200)), modifier = Modifier.fillMaxSize()) {
+            val hostName = ui.participants.firstOrNull { it.isOwner }?.username
+            PauseScreen(who = if (owner) "Ты" else hostName, isOwner = owner, compact = !isFull)
         }
 
         // Skip opening / next episode chips (host)
@@ -516,18 +441,12 @@ private fun PlayerArea(
         PlayerToastLayer(vm, Modifier.align(Alignment.TopCenter).padding(top = if (isFull) 64.dp else 52.dp))
 
         if (isFull) {
-            if (!chatOpen) ChatOverlay(ui, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = if (controls) 96.dp else 24.dp).widthIn(max = 340.dp).navigationBarsPadding())
+            if (!chatOpen) ChatOverlay(vm, ui, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = if (controls) 96.dp else 24.dp).widthIn(max = 360.dp).navigationBarsPadding())
             Column(
                 Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                AnimatedVisibility(controls, enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        LIVE_REACTIONS.forEach { (kind, emoji, _) ->
-                            ReactionButton(emoji, 40.dp) { haptic(false); vm.sendReaction(kind) }
-                        }
-                    }
-                }
+                FullscreenReactions(controls) { kind -> haptic(false); vm.sendReaction(kind) }
             }
             EndCardOverlay(vm, ui, progress, Modifier.align(Alignment.Center))
             FullscreenChat(vm, ui, chatOpen, { chatOpen = false }, openUser, Modifier.align(Alignment.CenterEnd))
@@ -820,55 +739,182 @@ private fun PlayerToastLayer(vm: RoomViewModel, modifier: Modifier) {
     }
 }
 
+private val QUICK_REPLIES = listOf("ахаха 😂", "жесть 😱", "🔥🔥🔥", "согласен", "жду!", "ещё серию?")
+private val CHAT_REACTIONS = listOf("heart" to "❤️", "like" to "👍", "dislike" to "👎")
+
 @Composable
-private fun ChatOverlay(ui: RoomUi, modifier: Modifier) {
+private fun ChatOverlay(vm: RoomViewModel, ui: RoomUi, modifier: Modifier) {
     val prefs by Session.appPrefs.collectAsState()
     val me = Session.user.collectAsState().value?.id
-    val items = remember { mutableStateListOf<Message>() }
+    val ids = remember { mutableStateListOf<Long>() }
+    var replyTo by remember { mutableStateOf<Message?>(null) }
     // Everything already in the room when fullscreen opened counts as read.
     val seen = remember { mutableSetOf<Long>().apply { ui.messages.forEach { add(it.id) } } }
+    val hold = replyTo != null
     LaunchedEffect(ui.messages) {
         val fresh = ui.messages.filter { it.id > 0 && it.id !in seen }
         fresh.forEach { seen += it.id }
         if (!prefs.chatToasts) return@LaunchedEffect
         fresh.filter { it.userId != me }.forEach { msg ->
-            items.add(msg)
-            while (items.size > 4) items.removeAt(0)
-            launch {
-                delay(7000)
-                items.remove(msg)
+            ids.add(msg.id)
+            while (ids.size > 4) ids.removeAt(0)
+        }
+    }
+    // Each toast lives 9 s; the timer stops while you're replying.
+    ids.forEach { id ->
+        androidx.compose.runtime.key(id) {
+            LaunchedEffect(hold) {
+                if (hold) return@LaunchedEffect
+                delay(9000)
+                ids.remove(id)
             }
         }
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.forEach { msg ->
-            androidx.compose.runtime.key(msg.id) {
-                val appear = remember { Animatable(0f) }
-                LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
-                Row(
-                    Modifier
-                        .graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * -80f; scaleX = 0.9f + appear.value * 0.1f; scaleY = scaleX }
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.62f))
-                        .border(1.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    UserAvatar(msg.avatar, msg.username, size = 26.dp, color = msg.nicknameColor, ring = false)
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(msg.username, color = nickColor(msg.username, msg.nicknameColor), fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                        if (msg.stickerUrl != null) {
-                            coil.compose.AsyncImage(
-                                model = space.aniroom.app.data.Api.media(msg.stickerUrl), contentDescription = "Стикер",
-                                modifier = Modifier.size(56.dp),
-                            )
-                        } else {
-                            Text(msg.text, color = Color.White, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+    Column(modifier.imePadding(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ids.forEach { id ->
+            val msg = ui.messages.firstOrNull { it.id == id } ?: return@forEach
+            androidx.compose.runtime.key(id) { ChatToast(msg, replyTo?.id == id, onReact = { r -> vm.toggleReaction(msg, r) }, onReply = { replyTo = msg }) }
+        }
+        AnimatedVisibility(replyTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            replyTo?.let { target ->
+                QuickReplyBar(
+                    target,
+                    onSend = { text -> vm.sendMessage(text, target); replyTo = null; ids.remove(target.id) },
+                    onClose = { replyTo = null },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatToast(msg: Message, active: Boolean, onReact: (String) -> Unit, onReply: () -> Unit) {
+    val m = Manga.colors
+    val haptic = rememberHaptic()
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
+    Column(
+        Modifier
+            .graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * -80f; scaleX = 0.9f + appear.value * 0.1f; scaleY = scaleX }
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = if (active) 0.8f else 0.62f))
+            .border(if (active) 2.dp else 1.5.dp, if (active) m.yellow else Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+            .clickable { haptic(false); onReply() }
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            UserAvatar(msg.avatar, msg.username, size = 26.dp, color = msg.nicknameColor, ring = false)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f, fill = false)) {
+                Text(msg.username, color = nickColor(msg.username, msg.nicknameColor), fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                if (msg.stickerUrl != null) {
+                    coil.compose.AsyncImage(model = space.aniroom.app.data.Api.media(msg.stickerUrl), contentDescription = "Стикер", modifier = Modifier.size(56.dp))
+                } else {
+                    Text(msg.text, color = Color.White, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            CHAT_REACTIONS.forEach { (key, emoji) ->
+                val r = msg.reactions.firstOrNull { it.reaction == key }
+                val mine = r?.reactedByMe == true
+                val bump by animateFloatAsState(if (mine) 1.12f else 1f, spring(dampingRatio = 0.35f, stiffness = 600f), label = "r")
+                Row(
+                    Modifier.scale(bump).clip(RoundedCornerShape(12.dp))
+                        .background(if (mine) m.yellow else Color.White.copy(alpha = 0.12f))
+                        .clickable { haptic(false); onReact(key) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(emoji, fontSize = 13.sp)
+                    if ((r?.count ?: 0) > 0) Text(" ${r?.count}", color = if (mine) m.onYellow else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(2.dp))
+            Row(
+                Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.12f)).clickable { haptic(false); onReply() }.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.Reply, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Text(" Ответить", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickReplyBar(target: Message, onSend: (String) -> Unit, onClose: () -> Unit) {
+    val m = Manga.colors
+    var text by remember(target.id) { mutableStateOf("") }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(target.id) { delay(150); runCatching { focus.requestFocus() } }
+    Column(
+        Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xF0141210)).border(2.dp, m.yellow, RoundedCornerShape(16.dp)).padding(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.AutoMirrored.Rounded.Reply, null, tint = m.yellow, modifier = Modifier.size(16.dp))
+            Text(" Ответ ${target.username}", color = m.yellow, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1)
+            Box(Modifier.size(28.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Close, "Закрыть", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
+        Row(Modifier.padding(vertical = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            QUICK_REPLIES.forEach { q ->
+                Text(
+                    q, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.14f)).clickable { onSend(q) }.padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+                if (text.isEmpty()) Text("Быстрый ответ…", color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
+                androidx.compose.foundation.text.BasicTextField(
+                    value = text, onValueChange = { text = it.take(360) },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 15.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(m.yellow),
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { if (text.isNotBlank()) onSend(text.trim()) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(if (text.isNotBlank()) m.red else Color.White.copy(alpha = 0.12f))
+                    .clickable(enabled = text.isNotBlank()) { onSend(text.trim()) },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.AutoMirrored.Rounded.Send, "Отправить", tint = Color.White, modifier = Modifier.size(18.dp)) }
+        }
+    }
+}
+
+/** Live reactions in fullscreen: always reachable — a small button that fans out the six emojis. */
+@Composable
+private fun FullscreenReactions(controlsVisible: Boolean, onReact: (String) -> Unit) {
+    val m = Manga.colors
+    var open by remember { mutableStateOf(false) }
+    var lastTap by remember { mutableStateOf(0L) }
+    LaunchedEffect(open, lastTap) {
+        if (open) { delay(4500); open = false }
+    }
+    val expanded = open || controlsVisible
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LIVE_REACTIONS.forEachIndexed { i, (kind, emoji, _) ->
+            AnimatedVisibility(
+                expanded,
+                enter = scaleIn(spring(dampingRatio = 0.5f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(120, delayMillis = i * 35)),
+                exit = scaleOut(targetScale = 0.3f) + fadeOut(),
+            ) {
+                ReactionButton(emoji, 42.dp) { lastTap = System.currentTimeMillis(); onReact(kind) }
+            }
+        }
+        AnimatedVisibility(!expanded, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)).border(2.dp, m.yellow.copy(alpha = 0.8f), CircleShape)
+                    .clickable { open = true; lastTap = System.currentTimeMillis() },
+                contentAlignment = Alignment.Center,
+            ) { Text("🔥", fontSize = 20.sp) }
         }
     }
 }
