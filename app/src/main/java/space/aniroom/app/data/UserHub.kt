@@ -107,7 +107,23 @@ object UserHub {
         client.onJson<AppNotification>("notification") { item ->
             if (!known.add(item.id)) return@onJson
             _items.update { listOf(item) + it.filter { row -> row.id != item.id } }
-            if (isForeground) _toasts.tryEmit(item) else showSystem(item)
+            if (item.kind == "badge_earned" || item.kind == "achievement_earned") {
+                if (isForeground) announceBadge(item) else showSystem(item)
+            } else if (isForeground) _toasts.tryEmit(item) else showSystem(item)
+        }
+        client.onJson<AchievementFull>("achievement:unlocked") { a ->
+            if (a.id.isBlank()) return@onJson
+            GameEvents.emit(
+                GameEvent.Achievement(GameEvents.nextId(), a.id, a.title, a.description, a.rarity, a.icon, completedSeasons = a.completedSeasons ?: 0, totalSeasons = a.totalSeasons ?: 4),
+                dedupe = "ach:${a.title.lowercase()}",
+            )
+        }
+        client.onJson<LevelUpFull>("game:level_up") { l ->
+            GameEvents.emit(GameEvent.LevelUp(GameEvents.nextId(), l), dedupe = "lvl:${l.level}")
+            scope.launch { refreshGame() }
+        }
+        client.onJson<QuestEvent>("game:quest") { q ->
+            GameEvents.emit(GameEvent.Quest(GameEvents.nextId(), q.title, q.xp), dedupe = "quest:${q.key}:${q.title}")
         }
         client.onJson<SystemNoticePayload>("admin_broadcast") { payload ->
             val item = AppNotification(-System.currentTimeMillis(), "announcement", kotlinx.serialization.json.buildJsonObject {
@@ -164,8 +180,22 @@ object UserHub {
             val first = known.isEmpty()
             known.addAll(list.map { it.id })
             _items.value = list
-            if (!first && fresh != null && isForeground) _toasts.tryEmit(fresh)
+            if (!first && fresh != null && isForeground) {
+                if (fresh.kind == "badge_earned" || fresh.kind == "achievement_earned") announceBadge(fresh) else _toasts.tryEmit(fresh)
+            }
         }
+    }
+
+    private fun announceBadge(item: AppNotification) {
+        fun p(key: String) = (item.payload[key] as? JsonPrimitive)?.contentOrNull
+        val title = p("title") ?: return
+        GameEvents.emit(
+            GameEvent.Achievement(
+                GameEvents.nextId(), p("key") ?: p("badge_key") ?: p("achievement_id") ?: "", title, p("description").orEmpty(),
+                p("rarity") ?: "common", p("icon").orEmpty(),
+            ),
+            dedupe = "ach:${title.lowercase()}",
+        )
     }
 
     fun markRead(item: AppNotification) {

@@ -139,13 +139,21 @@ fun AppRoot() {
                 val code = entry.arguments?.getString("code").orEmpty().uppercase()
                 RoomScreen(code, onBack = { nav.popBackStack() }, openUser = { nav.navigate("user/$it") })
             }
-            composable("user/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
-                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") }, openWardrobe = { nav.navigate("settings/WARDROBE") })
+            composable(
+                "user/{id}?tab={tab}",
+                arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("tab") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { entry ->
+                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, initialTab = if (entry.arguments?.getString("tab") == "badges") 1 else 0, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") }, openWardrobe = { nav.navigate("settings/WARDROBE") })
             }
             composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
             composable("settings/{section}") { entry -> SettingsScreen(onBack = { nav.popBackStack() }, initial = entry.arguments?.getString("section")) }
         }
         NotificationToastHost(openRoom = { nav.navigate("room/$it") { launchSingleTop = true } })
+        if (!space.aniroom.app.util.PipState.inPip.collectAsState().value) {
+            space.aniroom.app.ui.components.GameLayer(openAchievements = {
+                Session.user.value?.id?.let { nav.navigate("user/$it?tab=badges") { launchSingleTop = true } }
+            })
+        }
         UpdatePrompt(openUpdates = { nav.navigate("settings/UPDATES") })
     }
 }
@@ -242,7 +250,7 @@ private fun NotificationToastHost(openRoom: (String) -> Unit) {
     var toast by remember { mutableStateOf<AppNotification?>(null) }
     LaunchedEffect(Unit) {
         UserHub.toasts.collect {
-            toast = it
+            if (it.kind != "badge_earned" && it.kind != "achievement_earned") toast = it
         }
     }
     LaunchedEffect(toast) {

@@ -690,6 +690,13 @@ private fun LookSection() {
         Segmented(listOf("sm" to "Мелкий", "md" to "Обычный", "lg" to "Крупный"), prefs.chatFont) { v -> Session.updatePrefs { it.copy(chatFont = v) }; UserHub.syncPrefs() }
         SwitchRow("Сообщения поверх видео", "В полноэкранном режиме", prefs.chatToasts) { v -> Session.updatePrefs { it.copy(chatToasts = v) }; UserHub.syncPrefs() }
         SwitchRow("Вибрация", "Тактильный отклик на нажатия и реакции", prefs.haptics) { v -> Session.updatePrefs { it.copy(haptics = v) } }
+        SwitchRow("Звук достижений", "Короткий сигнал и анимация при новой награде", prefs.achievementSound) { v ->
+            Session.updatePrefs { it.copy(achievementSound = v) }
+            UserHub.syncPrefs()
+            if (v) space.aniroom.app.util.Sounds.play("rare", "rare")
+        }
+        val demoScope = rememberCoroutineScope()
+        MangaButton("Показать все анимации наград", { demoScope.launch { playAwardsDemo() } }, kind = ButtonKind.YELLOW, compact = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
     }
 }
 
@@ -941,3 +948,20 @@ fun UpdateContent(state: UpdateState, onDownload: (UpdateState.Available) -> Uni
 
 @Suppress("unused")
 private val divider: @Composable () -> Unit = { HorizontalDivider() }
+
+private suspend fun playAwardsDemo() {
+    fun id() = space.aniroom.app.data.GameEvents.nextId()
+    val E = space.aniroom.app.data.GameEvents
+    E.emit(space.aniroom.app.data.GameEvent.Xp(id(), 25, "Серия досмотрена", 0.62f, 7))
+    kotlinx.coroutines.delay(900)
+    E.emit(space.aniroom.app.data.GameEvent.Quest(id(), "Посмотри 3 серии с друзьями", 60))
+    kotlinx.coroutines.delay(900)
+    E.emit(space.aniroom.app.data.GameEvent.Streak(id(), 5, 15))
+    kotlinx.coroutines.delay(1200)
+    E.emit(space.aniroom.app.data.GameEvent.Achievement(id(), "first_session", "Первый сеанс", "Посмотри первую серию вместе", "common", ""))
+    E.emit(space.aniroom.app.data.GameEvent.Achievement(id(), "night_duo", "Ночной дуэт", "Смотри с другом после полуночи", "rare", ""))
+    E.emit(space.aniroom.app.data.GameEvent.Achievement(id(), "hundred_episodes", "Сотня серий", "100 серий в комнатах", "legendary", ""))
+    E.emit(space.aniroom.app.data.GameEvent.Achievement(id(), "rezero_season", "Re:Zero — сезон 2", "", "rare", "rezero-shard-gold", season = true, completedSeasons = 2, totalSeasons = 4))
+    kotlinx.coroutines.delay(2000)
+    E.emit(space.aniroom.app.data.GameEvent.Moment(id(), space.aniroom.app.data.MomentPayload("all_gasped", "shock", listOf("Аня", "Кирилл", "Ты"))))
+}

@@ -422,20 +422,54 @@ class RoomViewModel(app: Application, val roomCode: String) : AndroidViewModel(a
                 showToast(PlayerToast.Skip(System.nanoTime(), owner, seg?.let { (it.getOrNull(1) ?: 0.0) - (it.getOrNull(0) ?: 0.0) }))
             }
         }
-        s.onJson<AchievementPayload>("achievement:unlocked") { a ->
-            if (me?.doNotDisturb != true) showToast(PlayerToast.Info(System.nanoTime(), "Достижение: ${a.title}", "🏆"), 4500)
+        s.onJson<space.aniroom.app.data.AchievementFull>("achievement:unlocked") { a ->
+            if (a.id.isBlank()) return@onJson
+            val shard = a.icon.startsWith("rezero-shard")
+            space.aniroom.app.data.GameEvents.emit(
+                space.aniroom.app.data.GameEvent.Achievement(
+                    space.aniroom.app.data.GameEvents.nextId(), a.id, a.title, a.description, a.rarity, a.icon,
+                    season = false, completedSeasons = a.completedSeasons ?: 0, totalSeasons = a.totalSeasons ?: 4,
+                ),
+                dedupe = "ach:${a.title.lowercase()}",
+            )
+            if (shard) pushNotice("🏆 ${a.title}")
         }
-        s.onJson<XpEvent>("game:xp") { x ->
-            if (x.gained > 0 && x.reasons.any { !it.quiet }) {
-                showToast(PlayerToast.Info(System.nanoTime(), "+${x.gained} XP · ${x.reasons.firstOrNull { !it.quiet }?.label ?: ""}", "✦"))
-            }
+        s.onJson<space.aniroom.app.data.SeasonPayload>("achievement:season_completed") { p ->
+            if (p.season <= 0) return@onJson
+            space.aniroom.app.data.GameEvents.emit(
+                space.aniroom.app.data.GameEvent.Achievement(
+                    space.aniroom.app.data.GameEvents.nextId(), "rezero_season", p.title, "", "rare", "rezero-shard-gold",
+                    season = true, completedSeasons = p.completedSeasons, totalSeasons = p.totalSeasons,
+                ),
+                dedupe = "season:${p.season}:${p.completedSeasons}",
+            )
+        }
+        s.onJson<space.aniroom.app.data.XpFull>("game:xp") { x ->
             viewModelScope.launch { UserHub.refreshGame() }
+            val loud = x.reasons.filter { !it.quiet && !it.label.startsWith("Задание:") && !it.label.startsWith("Достижение «") }
+            if (loud.isEmpty() || x.levelUp) return@onJson
+            space.aniroom.app.data.GameEvents.emit(
+                space.aniroom.app.data.GameEvent.Xp(space.aniroom.app.data.GameEvents.nextId(), loud.sumOf { it.xp }, loud.joinToString(" · ") { it.label }, x.progress.toFloat(), x.level),
+            )
         }
-        s.onJson<LevelUpEvent>("game:level_up") { l ->
-            showToast(PlayerToast.Info(System.nanoTime(), "Новый уровень: ${l.level}!", "⬆"), 4500)
+        s.onJson<space.aniroom.app.data.LevelUpFull>("game:level_up") { l ->
+            viewModelScope.launch { delay(300); UserHub.refreshGame() }
+            space.aniroom.app.data.GameEvents.emit(space.aniroom.app.data.GameEvent.LevelUp(space.aniroom.app.data.GameEvents.nextId(), l), dedupe = "lvl:${l.level}")
         }
-        s.onJson<QuestEvent>("game:quest") { q -> showToast(PlayerToast.Info(System.nanoTime(), "Квест выполнен: ${q.title} · +${q.xp} XP", "✓"), 4000) }
-        s.onJson<StreakEvent>("game:streak") { st -> showToast(PlayerToast.Info(System.nanoTime(), "Серия дней: ${st.days} 🔥", "🔥")) }
+        s.onJson<QuestEvent>("game:quest") { q ->
+            viewModelScope.launch { UserHub.refreshGame() }
+            space.aniroom.app.data.GameEvents.emit(space.aniroom.app.data.GameEvent.Quest(space.aniroom.app.data.GameEvents.nextId(), q.title, q.xp), dedupe = "quest:${q.key}:${q.title}")
+        }
+        s.onJson<StreakEvent>("game:streak") { st ->
+            viewModelScope.launch { UserHub.refreshGame() }
+            if (st.days >= 2) space.aniroom.app.data.GameEvents.emit(space.aniroom.app.data.GameEvent.Streak(space.aniroom.app.data.GameEvents.nextId(), st.days, st.bonus), dedupe = "streak:${st.days}")
+        }
+        s.onJson<space.aniroom.app.data.MomentPayload>("game:moment") { mo ->
+            if (mo.kind.isNotBlank()) space.aniroom.app.data.GameEvents.emit(space.aniroom.app.data.GameEvent.Moment(space.aniroom.app.data.GameEvents.nextId(), mo))
+        }
+        s.onJson<space.aniroom.app.data.RoomGoalPayload>("game:room_goal") { g ->
+            if (g.justCompleted) space.aniroom.app.data.GameEvents.emit(space.aniroom.app.data.GameEvent.Goal(space.aniroom.app.data.GameEvents.nextId(), g), dedupe = "goal:${g.roomCode}:${g.title}")
+        }
         s.connect()
     }
 

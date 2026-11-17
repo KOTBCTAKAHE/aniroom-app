@@ -1,0 +1,21 @@
+Achievement sounds for AniRoom.
+
+Each file mixes a cue from "UI SFX" by Romain Simon (https://uisfx.com,
+https://github.com/romainsimon/uisfx), dedicated to the public domain under
+CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/), with a
+synthesized whoosh / clock-tick / impact layer made for AniRoom.
+
+file                    uisfx source
+first_session.mp3       glass/badge
+marathoner.mp3          arcade/streak
+night_owl.mp3           dreamy/badge
+inseparable_duo.mp3     soft/connect
+night_duo.mp3           dreamy/connect
+company.mp3             rubber/bonus
+hundred_episodes.mp3    cinematic/achievement   (also used for any legendary)
+anime_squad.mp3         cinematic/level-up
+rezero_first_loop.mp3   cinematic/undo
+rezero_all_loops.mp3    cinematic/complete
+rezero_season.mp3       glass/checkpoint        (Re:Zero season completed)
+common.mp3              glass/success           (fallback for new common badges)
+rare.mp3                scifi/reward            (fallback for new rare badges)

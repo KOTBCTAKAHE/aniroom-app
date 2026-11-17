@@ -41,6 +41,7 @@ class AniRoomApp : Application(), ImageLoaderFactory {
             .build()
         Api.init(http)
         createChannels()
+        space.aniroom.app.util.Sounds.init(this)
         UserHub.start(this)
     }
 

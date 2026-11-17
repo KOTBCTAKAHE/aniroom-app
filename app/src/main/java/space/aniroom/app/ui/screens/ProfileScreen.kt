@@ -62,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -117,7 +118,10 @@ fun ProfileScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     openWardrobe: () -> Unit = {},
     openEditor: () -> Unit = openSettings,
+    initialTab: Int = 0,
 ) {
+    var selectedBadge by remember { mutableStateOf<Badge?>(null) }
+    selectedBadge?.let { b -> BadgeModal(b) { selectedBadge = null } }
     val m = Manga.colors
     val me by Session.user.collectAsState()
     val game by UserHub.game.collectAsState()
@@ -129,7 +133,7 @@ fun ProfileScreen(
     var badges by remember(userId) { mutableStateOf<List<Badge>?>(null) }
     var list by remember(userId) { mutableStateOf<AnimeListPage?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(initialTab) }
     var error by remember { mutableStateOf<String?>(null) }
     var avatarBusy by remember { mutableStateOf(false) }
 
@@ -335,7 +339,7 @@ fun ProfileScreen(
                 else if (b.isEmpty()) item { EmptyState("Нет достижений", "Они появятся после первых просмотров", mood = MascotMood.SEARCH) }
                 else items(b.filter { !it.secret || it.earned }.sortedByDescending { it.earned }.chunked(2), key = { it.first().key }) { row ->
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        row.forEach { badge -> BadgeCard(badge, Modifier.weight(1f)) }
+                        row.forEach { badge -> BadgeCard(badge, Modifier.weight(1f)) { selectedBadge = badge } }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
@@ -390,7 +394,7 @@ private fun ActivityChart(values: List<Double>) {
 }
 
 @Composable
-private fun BadgeCard(badge: Badge, modifier: Modifier) {
+private fun BadgeCard(badge: Badge, modifier: Modifier, onClick: () -> Unit) {
     val m = Manga.colors
     val rarityColor = when (badge.rarity.lowercase()) {
         "legendary", "легендарный" -> m.yellow
@@ -398,7 +402,7 @@ private fun BadgeCard(badge: Badge, modifier: Modifier) {
         "epic", "эпический" -> Color(0xFF8E44AD)
         else -> m.paper3
     }
-    MangaPanel(modifier, color = if (badge.earned) m.paper2 else m.paper3, shadow = if (badge.earned) 3.dp else 1.dp) {
+    MangaPanel(modifier, color = if (badge.earned) m.paper2 else m.paper3, shadow = if (badge.earned) 3.dp else 1.dp, onClick = onClick) {
         Column(Modifier.padding(12.dp)) {
             Box(Modifier.size(38.dp).clip(CircleShape).background(if (badge.earned) rarityColor else m.paper).border(2.dp, m.ink, CircleShape), contentAlignment = Alignment.Center) {
                 Text(if (badge.earned) "★" else "?", fontWeight = FontWeight.Black, color = m.ink)
@@ -411,6 +415,54 @@ private fun BadgeCard(badge: Badge, modifier: Modifier) {
                 ProgressLine(badge.progress.toFloat().let { if (it > 1f) it / 100f else it }, Modifier.fillMaxWidth(), height = 5.dp)
             }
             if (badge.rarity.isNotBlank()) Text(badge.rarity, color = m.muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun BadgeModal(badge: Badge, onClose: () -> Unit) {
+    val m = Manga.colors
+    val legendary = badge.rarity.contains("legend", true) || badge.rarity.contains("легенд", true)
+    val rare = badge.rarity.contains("rare", true) || badge.rarity.contains("редк", true)
+    val open = remember { androidx.compose.animation.core.Animatable(0f) }
+    val spin = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(badge.key) {
+        if (badge.earned) {
+            space.aniroom.app.util.Sounds.play(badge.rarity, badge.key)
+            space.aniroom.app.util.Sounds.stamp(if (legendary) "legendary" else if (rare) "rare" else "common")
+        }
+        launch { open.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 380f)) }
+        if (badge.earned) spin.animateTo(360f, androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Box(contentAlignment = Alignment.Center) {
+            if (badge.earned) space.aniroom.app.ui.components.Confetti(Modifier.size(420.dp), count = if (legendary) 48 else 24, delayMs = 250)
+            MangaPanel(
+                Modifier.fillMaxWidth().graphicsLayer { scaleX = 0.6f + open.value * 0.4f; scaleY = 0.6f + open.value * 0.4f; alpha = open.value.coerceIn(0f, 1f); rotationZ = (1f - open.value) * -6f },
+                color = if (legendary && badge.earned) Color(0xFF1A1816) else m.paper2, radius = 22.dp, shadow = 6.dp,
+            ) {
+                Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    val rarityColor = when { legendary -> Color(0xFFFFC83A); rare -> m.blue; else -> m.yellow }
+                    Box(
+                        Modifier.size(96.dp).graphicsLayer { rotationY = spin.value; cameraDistance = 12f * density }
+                            .clip(CircleShape).background(if (badge.earned) rarityColor else m.paper3).border(3.dp, m.ink, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(if (!badge.earned) "?" else if (legendary) "👑" else if (rare) "💎" else "🏆", fontSize = 40.sp) }
+                    Spacer(Modifier.height(14.dp))
+                    val onDark = legendary && badge.earned
+                    Text(if (badge.earned) "ПОЛУЧЕНО" else "ЕЩЁ НЕ ОТКРЫТО", style = Kicker, color = if (onDark) Color(0xFFFFC83A) else m.red)
+                    Text(badge.title, color = if (onDark) Color.White else m.ink, fontWeight = FontWeight.Black, fontSize = 20.sp, textAlign = TextAlign.Center)
+                    Text(badge.description, color = if (onDark) Color.White.copy(alpha = 0.75f) else m.inkSoft, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                    if (!badge.earned && badge.progressTarget != null && badge.progressTarget > 0) {
+                        Spacer(Modifier.height(10.dp))
+                        ProgressLine(((badge.progressValue ?: 0.0) / badge.progressTarget).toFloat(), Modifier.fillMaxWidth())
+                        Text("${(badge.progressValue ?: 0.0).toInt()} / ${badge.progressTarget.toInt()}", color = m.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    badge.earnedPercent?.let { Text("Есть у ${"%.0f".format(it)}% зрителей", color = if (onDark) Color.White.copy(alpha = 0.6f) else m.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
+                    Spacer(Modifier.height(16.dp))
+                    MangaButton("Круто!", onClose, kind = if (onDark) ButtonKind.YELLOW else ButtonKind.RED, compact = true)
+                }
+            }
         }
     }
 }
