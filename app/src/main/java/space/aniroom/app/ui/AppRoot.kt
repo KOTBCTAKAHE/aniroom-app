@@ -73,6 +73,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import space.aniroom.app.data.AppNotification
 import space.aniroom.app.data.Session
 import space.aniroom.app.data.UserHub
@@ -93,6 +94,8 @@ import space.aniroom.app.ui.theme.Manga
 /** Room code from a deep link / notification, consumed once signed in. */
 object PendingNav {
     val room = MutableStateFlow<String?>(null)
+    /** Launcher shortcut actions: create, scan. */
+    val action = MutableStateFlow<String?>(null)
 }
 
 @Composable
@@ -124,6 +127,7 @@ fun AppRoot() {
                     openRoom = { nav.navigate("room/$it") { launchSingleTop = true } },
                     openUser = { nav.navigate("user/$it") },
                     openSettings = { nav.navigate("settings") },
+                    openSection = { nav.navigate("settings/$it") },
                 )
             }
             composable(
@@ -136,18 +140,20 @@ fun AppRoot() {
                 RoomScreen(code, onBack = { nav.popBackStack() }, openUser = { nav.navigate("user/$it") })
             }
             composable("user/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
-                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") })
+                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") }, openWardrobe = { nav.navigate("settings/WARDROBE") })
             }
             composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
+            composable("settings/{section}") { entry -> SettingsScreen(onBack = { nav.popBackStack() }, initial = entry.arguments?.getString("section")) }
         }
         NotificationToastHost(openRoom = { nav.navigate("room/$it") { launchSingleTop = true } })
+        UpdatePrompt(openUpdates = { nav.navigate("settings/UPDATES") })
     }
 }
 
 private enum class Tab(val label: String) { HOME("Главная"), FRIENDS("Друзья"), ALERTS("Новое"), PROFILE("Профиль") }
 
 @Composable
-private fun MainScreen(openRoom: (String) -> Unit, openUser: (Int) -> Unit, openSettings: () -> Unit) {
+private fun MainScreen(openRoom: (String) -> Unit, openUser: (Int) -> Unit, openSettings: () -> Unit, openSection: (String) -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     val user by Session.user.collectAsState()
     val unread = UserHub.items.collectAsState().value.count { !it.isRead }
@@ -160,6 +166,8 @@ private fun MainScreen(openRoom: (String) -> Unit, openUser: (Int) -> Unit, open
         }
     }
     BackHandler(tab != Tab.HOME) { tab = Tab.HOME }
+    val action by PendingNav.action.collectAsState()
+    LaunchedEffect(action) { if (action != null) tab = Tab.HOME }
     val padding = PaddingValues(bottom = 96.dp)
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -176,7 +184,7 @@ private fun MainScreen(openRoom: (String) -> Unit, openUser: (Int) -> Unit, open
                 Tab.HOME -> HomeTab(openRoom, openSettings, openProfile = { tab = Tab.PROFILE }, contentPadding = padding)
                 Tab.FRIENDS -> FriendsTab(openUser, openRoom, padding)
                 Tab.ALERTS -> NotificationsTab(openRoom, openProfile = { tab = Tab.PROFILE }, openFriends = { tab = Tab.FRIENDS }, contentPadding = padding)
-                Tab.PROFILE -> ProfileScreen(user?.id ?: 0, isTab = true, onBack = { tab = Tab.HOME }, openSettings = openSettings, contentPadding = padding)
+                Tab.PROFILE -> ProfileScreen(user?.id ?: 0, isTab = true, onBack = { tab = Tab.HOME }, openSettings = openSettings, contentPadding = padding, openWardrobe = { openSection("WARDROBE") }, openEditor = { openSection("PROFILE") })
             }
         }
         BottomBar(tab, unread, Modifier.align(Alignment.BottomCenter)) { tab = it }
@@ -263,6 +271,48 @@ private fun NotificationToastHost(openRoom: (String) -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text(copy.title, color = m.red, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Text(copy.body, color = m.ink, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdatePrompt(openUpdates: () -> Unit) {
+    val m = Manga.colors
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val state by space.aniroom.app.data.Updater.state.collectAsState()
+    LaunchedEffect(Unit) {
+        delay(2500)
+        space.aniroom.app.data.Updater.check()
+    }
+    val available = state as? space.aniroom.app.data.UpdateState.Available
+    if (available != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { space.aniroom.app.data.Updater.dismiss() }) {
+            MangaPanel(Modifier.fillMaxWidth(), color = m.paper2, shadow = 5.dp, radius = 22.dp) {
+                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Mascot(MascotMood.HAPPY, size = 96.dp)
+                    Text("ОБНОВЛЕНИЕ", style = space.aniroom.app.ui.theme.Kicker, color = m.red)
+                    Text("Вышла сборка ${available.version}", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, color = m.ink)
+                    if (available.notes.isNotBlank()) Text(
+                        available.notes, color = m.inkSoft, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    space.aniroom.app.ui.components.MangaButton(
+                        "Обновить", {
+                            scope.launch { space.aniroom.app.data.Updater.download(context, available) }
+                            openUpdates()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row {
+                        Text("Позже", color = m.ink, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { space.aniroom.app.data.Updater.dismiss() }.padding(8.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text("Пропустить эту", color = m.muted, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { space.aniroom.app.data.Updater.skip(available.version) }.padding(8.dp))
                     }
                 }
             }

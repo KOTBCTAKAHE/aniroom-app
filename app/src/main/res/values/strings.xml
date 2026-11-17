@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">AniRoom</string>
     <string name="channel_social">Друзья и приглашения</string>
+    <string name="shortcut_create">Новая комната</string>
+    <string name="shortcut_scan">Сканировать QR</string>
 </resources>

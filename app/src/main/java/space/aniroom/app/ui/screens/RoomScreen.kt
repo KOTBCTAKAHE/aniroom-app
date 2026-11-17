@@ -138,6 +138,12 @@ import space.aniroom.app.ui.theme.DisplayFont
 import space.aniroom.app.ui.theme.Kicker
 import space.aniroom.app.ui.theme.Manga
 import space.aniroom.app.util.PipState
+import space.aniroom.app.util.RoomLinks
+import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.BrightnessHigh
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlin.math.roundToInt
 import space.aniroom.app.util.findActivity
 import space.aniroom.app.util.formatTime
 import space.aniroom.app.util.plural
@@ -209,6 +215,8 @@ fun RoomScreen(code: String, onBack: () -> Unit, openUser: (Int) -> Unit) {
     }
 
     BackHandler(isFull) { exitFull() }
+    val loadedTitle = ui.room?.anime?.title ?: ui.room?.title
+    LaunchedEffect(loadedTitle) { if (loadedTitle != null) RoomLinks.pushShortcut(context, code, loadedTitle) }
 
     if (ui.loading) {
         LoadingScreen("Подключаю комнату…")
@@ -319,20 +327,20 @@ private fun PlayerArea(
         PlayerSurface(vm, Modifier.fillMaxSize())
 
         // Gestures: tap toggles controls, double-tap seeks (host).
-        Box(
-            Modifier.fillMaxSize().pointerInput(owner) {
-                detectTapGestures(
-                    onTap = { controls = !controls },
-                    onDoubleTap = { offset ->
-                        val forward = offset.x > widthPx / 2
-                        if (vm.seekBy(if (forward) 10.0 else -10.0)) {
-                            haptic(false)
-                            seekFlash = System.nanoTime() to (if (forward) 1 else -1)
-                        } else denied()
-                    },
-                )
-            },
-        )
+        val tapGestures = Modifier.pointerInput(owner) {
+            detectTapGestures(
+                onTap = { controls = !controls },
+                onDoubleTap = { offset ->
+                    val forward = offset.x > widthPx / 2
+                    if (vm.seekBy(if (forward) 10.0 else -10.0)) {
+                        haptic(false)
+                        seekFlash = System.nanoTime() to (if (forward) 1 else -1)
+                    } else denied()
+                },
+            )
+        }
+        if (isFull && Session.appPrefs.collectAsState().value.gestures) SwipeAdjustLayer(Modifier.fillMaxSize(), tapGestures)
+        else Box(Modifier.fillMaxSize().then(tapGestures))
 
         FlyingLayer(vm, Modifier.fillMaxSize())
         BurstLayer(vm, Modifier.align(Alignment.Center))
@@ -848,13 +856,49 @@ private fun RoomHeader(vm: RoomViewModel, ui: RoomUi) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        RoundIcon(Icons.Rounded.Share, "Поделиться", {
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, "Смотрим вместе в AniRoom${room.anime?.title?.let { " — $it" } ?: ""}: $inviteUrl")
+        var inviteOpen by remember { mutableStateOf(false) }
+        RoundIcon(Icons.Rounded.QrCode2, "Пригласить", { inviteOpen = true }, size = 36.dp)
+        if (inviteOpen) InviteDialog(room.roomCode, room.title, room.anime?.title, inviteUrl) { inviteOpen = false }
+    }
+}
+
+@Composable
+private fun InviteDialog(code: String, title: String, anime: String?, url: String, onDismiss: () -> Unit) {
+    val m = Manga.colors
+    val context = LocalContext.current
+    val qr = remember(url) { RoomLinks.qr(url).asImageBitmap() }
+    val appear = remember { Animatable(0.7f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.5f)) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        MangaPanel(Modifier.fillMaxWidth().scale(appear.value), color = m.paper2, radius = 22.dp, shadow = 5.dp) {
+            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("ПРИГЛАШЕНИЕ", style = Kicker, color = m.red)
+                Text(title, style = MaterialTheme.typography.titleLarge, color = m.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                anime?.let { Text(it, color = m.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Spacer(Modifier.height(14.dp))
+                MangaPanel(Modifier.size(230.dp).rotate(-1.5f), color = m.paper2, radius = 16.dp, shadow = 4.dp) {
+                    androidx.compose.foundation.Image(qr, "QR-код комнаты", Modifier.fillMaxSize().padding(10.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(code, fontFamily = DisplayFont, fontSize = 30.sp, color = m.ink, letterSpacing = 6.sp)
+                Text("Наведи камеру друга на код или отправь ссылку", color = m.muted, fontSize = 12.sp)
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MangaButton("Копировать", {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("AniRoom", url))
+                        Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+                    }, kind = ButtonKind.PAPER, compact = true, icon = Icons.Rounded.ContentCopy, modifier = Modifier.weight(1f))
+                    MangaButton("Отправить", {
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "Смотрим вместе в AniRoom${anime?.let { " — $it" } ?: ""}: $url")
+                        }
+                        context.startActivity(Intent.createChooser(send, "Пригласить в комнату"))
+                    }, compact = true, icon = Icons.Rounded.Share, modifier = Modifier.weight(1f))
+                }
             }
-            context.startActivity(Intent.createChooser(send, "Пригласить в комнату"))
-        }, size = 36.dp)
+        }
     }
 }
 
@@ -947,3 +991,67 @@ private fun RoomTabs(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
     }
 }
 
+
+/** Fullscreen swipe gestures: left half = brightness, right half = volume. */
+@Composable
+private fun SwipeAdjustLayer(modifier: Modifier, tapGestures: Modifier) {
+    val context = LocalContext.current
+    val activity = context.findActivity()
+    val audio = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
+    val maxVolume = remember { audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var indicator by remember { mutableStateOf<Pair<Boolean, Float>?>(null) }
+    var brightness by remember {
+        mutableFloatStateOf(activity?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.6f)
+    }
+    var volume by remember { mutableFloatStateOf(audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
+    LaunchedEffect(indicator) {
+        if (indicator != null) {
+            delay(900)
+            indicator = null
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = -1f } }
+        }
+    }
+    BoxWithConstraints(modifier) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        Box(
+            Modifier.fillMaxSize().then(tapGestures).pointerInput(Unit) {
+                var left = false
+                androidx.compose.foundation.gestures.detectVerticalDragGestures(
+                    onDragStart = { offset -> left = offset.x < w / 2 },
+                    onVerticalDrag = { change, drag ->
+                        change.consume()
+                        val delta = -drag / (h * 0.8f)
+                        if (left) {
+                            brightness = (brightness + delta).coerceIn(0.02f, 1f)
+                            activity?.window?.let { win -> win.attributes = win.attributes.apply { screenBrightness = brightness } }
+                            indicator = true to brightness
+                        } else {
+                            volume = (volume + delta).coerceIn(0f, 1f)
+                            audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (volume * maxVolume).roundToInt(), 0)
+                            indicator = false to volume
+                        }
+                    },
+                )
+            },
+        )
+        indicator?.let { (isBrightness, value) ->
+            Row(
+                Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(if (isBrightness) Icons.Rounded.BrightnessHigh else Icons.AutoMirrored.Rounded.VolumeUp, null, tint = Color.White)
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.width(140.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.25f))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(value).background(Manga.colors.red))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text("${(value * 100).roundToInt()}%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+        }
+    }
+}

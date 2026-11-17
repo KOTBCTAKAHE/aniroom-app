@@ -130,6 +130,9 @@ import space.aniroom.app.ui.components.SkeletonBox
 import space.aniroom.app.ui.components.Tag
 import space.aniroom.app.ui.components.UserAvatar
 import space.aniroom.app.ui.components.nickColor
+import space.aniroom.app.ui.components.NickText
+import space.aniroom.app.ui.components.bubbleSkin
+import space.aniroom.app.ui.components.bubbleExtras
 import space.aniroom.app.ui.theme.BodyFont
 import space.aniroom.app.ui.theme.DisplayFont
 import space.aniroom.app.ui.theme.Kicker
@@ -388,13 +391,13 @@ private fun MessageRow(
         ) {
             if (!mine) {
                 if (showHeader) Box(Modifier.clickable(onClick = onUser)) {
-                    UserAvatar(message.avatar, message.username, size = 34.dp, color = message.nicknameColor)
+                    UserAvatar(message.avatar, message.username, size = 34.dp, color = message.nicknameColor, frame = message.game?.frame)
                 } else Spacer(Modifier.width(34.dp))
                 Spacer(Modifier.width(8.dp))
             }
             Column(Modifier.widthIn(max = 290.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 if (showHeader && !mine) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp)) {
-                    Text(message.username, color = nameColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    NickText(message.username, nameColor, message.game?.nickFx, fontSize = 13.sp)
                     if (message.specialTitle == "owner") {
                         Spacer(Modifier.width(4.dp))
                         Tag("создатель", color = m.ink, textColor = m.paper)
@@ -405,16 +408,22 @@ private fun MessageRow(
                     }
                 }
                 Box {
-                    val shape = RoundedCornerShape(
-                        topStart = 18.dp, topEnd = 18.dp,
-                        bottomStart = if (mine) 18.dp else 6.dp, bottomEnd = if (mine) 6.dp else 18.dp,
+                    val skin = bubbleSkin(
+                        message.game?.bubble, mine, m,
+                        RoundedCornerShape(
+                            topStart = 18.dp, topEnd = 18.dp,
+                            bottomStart = if (mine) 18.dp else 6.dp, bottomEnd = if (mine) 6.dp else 18.dp,
+                        ),
                     )
-                    val bubbleColor = if (message.stickerUrl != null) Color.Transparent else if (mine) m.red else m.paper2
+                    val shape = skin.shape
+                    val bubbleColor = if (message.stickerUrl != null) Color.Transparent else skin.background
                     Column(
                         Modifier
+                            .rotate(if (message.stickerUrl == null) skin.tilt else 0f)
                             .clip(shape)
                             .background(bubbleColor)
-                            .then(if (message.stickerUrl == null) Modifier.border(2.dp, m.ink, shape) else Modifier)
+                            .then(if (message.stickerUrl == null && !skin.dashed) Modifier.border(if (message.game?.bubble == "scroll") 3.dp else 2.dp, m.ink, shape) else Modifier)
+                            .then(if (message.stickerUrl == null) Modifier.bubbleExtras(skin, skin.text) else Modifier)
                             .combinedClickable(onClick = {}, onLongClick = { menu = true }, onDoubleClick = { onReact("heart") })
                             .padding(horizontal = if (message.stickerUrl != null) 0.dp else 12.dp, vertical = if (message.stickerUrl != null) 0.dp else 8.dp),
                     ) {
@@ -439,12 +448,12 @@ private fun MessageRow(
                                 modifier = Modifier.size(128.dp),
                             )
                         } else {
-                            Text(message.text, color = if (mine) Color.White else m.ink, fontSize = 15.sp, lineHeight = 20.sp)
+                            Text(message.text, color = skin.text, fontSize = chatFontSize(), lineHeight = (chatFontSize().value + 5).sp)
                         }
                         Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 chatTime(message.createdAt), fontSize = 10.sp,
-                                color = if (mine && message.stickerUrl == null) Color.White.copy(alpha = 0.7f) else m.muted,
+                                color = if (message.stickerUrl == null) skin.text.copy(alpha = 0.65f) else m.muted,
                             )
                             if (message.deliveryState == "sending") {
                                 Spacer(Modifier.width(3.dp))
@@ -660,11 +669,11 @@ fun PeoplePanel(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
             var menu by remember { mutableStateOf(false) }
             MangaPanel(Modifier.fillMaxWidth().animateItem(), shadow = 2.5.dp, onClick = { openUser(p.id) }) {
                 Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    UserAvatar(p.avatar, p.username, size = 40.dp, color = p.nicknameColor, online = p.online)
+                    UserAvatar(p.avatar, p.username, size = 40.dp, color = p.nicknameColor, online = p.online, frame = p.game?.frame)
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(p.username, color = nickColor(p.username, p.nicknameColor), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            NickText(p.username, nickColor(p.username, p.nicknameColor), p.game?.nickFx, Modifier.weight(1f, fill = false), fontSize = 15.sp)
                             if (p.isOwner) {
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.Rounded.WorkspacePremium, "Хост", tint = m.red, modifier = Modifier.size(16.dp))
@@ -885,4 +894,11 @@ private fun StarRow(value: Int, size: Dp = 30.dp, onRate: (Int) -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun chatFontSize() = when (Session.appPrefs.collectAsState().value.chatFont) {
+    "sm" -> 13.sp
+    "lg" -> 17.sp
+    else -> 15.sp
 }

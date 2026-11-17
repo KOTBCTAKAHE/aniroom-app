@@ -24,6 +24,7 @@ import space.aniroom.app.ui.PendingNav
 import space.aniroom.app.ui.theme.AniRoomTheme
 import space.aniroom.app.ui.theme.resolveManga
 import space.aniroom.app.util.PipState
+import space.aniroom.app.util.RoomLinks
 
 class MainActivity : ComponentActivity() {
 
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         setContent {
             val prefs by Session.appPrefs.collectAsState()
-            AniRoomTheme(prefs.theme) {
+            AniRoomTheme(prefs.theme, prefs.materialYou) {
                 val dark = resolveManga(prefs.theme).isDark
                 LaunchedEffect(dark) {
                     enableEdgeToEdge(
@@ -67,7 +68,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        val data = intent?.data ?: return
+        intent ?: return
+        if (intent.action == Intent.ACTION_SEND) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            RoomLinks.extract(text, allowBare = true)?.let { PendingNav.room.value = it }
+            return
+        }
+        val data = intent.data ?: return
+        if (data.scheme == "aniroom" && data.host == "action") {
+            PendingNav.action.value = data.pathSegments.firstOrNull()
+            return
+        }
         val code = when (data.scheme) {
             "aniroom" -> data.pathSegments.firstOrNull() ?: data.lastPathSegment
             else -> data.pathSegments.let { segments ->

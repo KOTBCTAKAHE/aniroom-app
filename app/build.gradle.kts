@@ -31,6 +31,7 @@ android {
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "API_URL", "\"https://backend-proxy-rave.vercel.app\"")
         buildConfigField("String", "SITE_URL", "\"https://aniroom.space\"")
+        buildConfigField("String", "UPDATE_REPO", "\"${System.getenv("GITHUB_REPOSITORY") ?: "KOTBCTAKAHE/aniroom-app"}\"")
     }
 
     signingConfigs {
@@ -118,6 +119,9 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("io.coil-kt:coil-gif:2.7.0")
     implementation("io.socket:socket.io-client:2.1.1") {
         exclude(group = "org.json", module = "json")

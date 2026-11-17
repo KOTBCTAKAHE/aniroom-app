@@ -49,10 +49,25 @@ interface AniApi {
     @POST("auth/avatar")
     suspend fun uploadAvatar(@Part file: MultipartBody.Part): User
 
+    @Multipart
+    @POST("auth/avatar")
+    suspend fun uploadAvatarCropped(
+        @Part file: MultipartBody.Part,
+        @Part("crop_x") cropX: RequestBody,
+        @Part("crop_y") cropY: RequestBody,
+        @Part("crop_scale") cropScale: RequestBody,
+        @Part("rotation") rotation: RequestBody,
+    ): User
+
     @PATCH("users/me/preferences") suspend fun updatePreferences(@Body body: JsonObject): User
     @PATCH("users/me/profile") suspend fun updateProfile(@Body body: JsonObject): User
 
     @GET("game/me") suspend fun gameMe(): GameMe
+    @PATCH("game/me/cosmetics") suspend fun updateCosmetics(@Body body: JsonObject): GameMe
+    @POST("users/me/username") suspend fun changeUsername(@Body body: JsonObject): User
+    @POST("users/me/delete") suspend fun deleteAccount(@Body body: JsonObject)
+    @GET("users/blocks") suspend fun blockedUsers(): List<BlockedUser>
+    @POST("users/me/list/import/shikimori") suspend fun importShikimori(@Body body: JsonObject): ShikimoriImportResult
     @GET("game/leaderboard") suspend fun leaderboard(): Leaderboard
 
     @GET("users/{id}") suspend fun publicProfile(@Path("id") id: Int): PublicProfile

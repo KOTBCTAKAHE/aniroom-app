@@ -87,6 +87,19 @@ import space.aniroom.app.data.AnimeChoice
 import space.aniroom.app.data.Room
 import space.aniroom.app.data.Session
 import space.aniroom.app.data.UserHub
+import space.aniroom.app.ui.PendingNav
+import space.aniroom.app.util.RoomLinks
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import kotlinx.coroutines.delay
 import space.aniroom.app.ui.components.ButtonKind
 import space.aniroom.app.ui.components.Dialogish
 import space.aniroom.app.ui.components.EmptyState
@@ -137,6 +150,40 @@ fun HomeTab(
         }
     }
 
+    val context = LocalContext.current
+    fun scan() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).enableAutoZoom().build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { barcode ->
+                val code = RoomLinks.extract(barcode.rawValue, allowBare = true)
+                if (code != null) join(code) else joinError = "Этот QR не похож на приглашение AniRoom"
+            }
+            .addOnFailureListener { joinError = "Сканер недоступен: ${it.message ?: "нет сервисов Google"}" }
+    }
+
+    val action by PendingNav.action.collectAsState()
+    LaunchedEffect(action) {
+        when (action) {
+            "create" -> createOpen = true
+            "scan" -> scan()
+        }
+        if (action != null) PendingNav.action.value = null
+    }
+
+    // Clipboard: a copied room link → offer to jump in.
+    var clipCode by remember { mutableStateOf<String?>(null) }
+    LifecycleResumeEffect(Unit) {
+        val job = scope.launch {
+            delay(400)
+            if (!Session.appPrefs.value.clipboardHints) return@launch
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = runCatching { cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull()
+            val code = RoomLinks.extract(text)
+            if (code != null && code != Session.lastJoinCode) clipCode = code
+        }
+        onPauseOrDispose { job.cancel() }
+    }
+
     PullToRefreshBox(isRefreshing = ui.refreshing, onRefresh = { vm.refresh() }, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -185,8 +232,25 @@ fun HomeTab(
                 }
             }
             item {
+                AnimatedVisibility(clipCode != null) {
+                    MangaPanel(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp), color = m.yellow, shadow = 3.dp) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.ContentPaste, null, tint = m.onYellow)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Ссылка на комнату в буфере", color = m.onYellow, fontWeight = FontWeight.Bold)
+                                Text("Войти в ${clipCode ?: ""}?", color = m.onYellow.copy(alpha = 0.8f), fontSize = 12.sp)
+                            }
+                            Text("Нет", color = m.onYellow, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { Session.lastJoinCode = clipCode; clipCode = null }.padding(8.dp))
+                            MangaButton("Войти", { val c = clipCode ?: return@MangaButton; Session.lastJoinCode = c; clipCode = null; join(c) }, kind = ButtonKind.INK, compact = true)
+                        }
+                    }
+                }
+            }
+            item {
                 HeroCard(
                     onCreate = { createOpen = true },
+                    onScan = ::scan,
                     onJoin = ::join,
                     busy = joinBusy,
                     error = joinError,
@@ -298,7 +362,7 @@ private fun FlameStreak(days: Int, atRisk: Boolean) {
 }
 
 @Composable
-private fun HeroCard(onCreate: () -> Unit, onJoin: (String) -> Unit, busy: Boolean, error: String?, modifier: Modifier = Modifier) {
+private fun HeroCard(onCreate: () -> Unit, onScan: () -> Unit, onJoin: (String) -> Unit, busy: Boolean, error: String?, modifier: Modifier = Modifier) {
     val m = Manga.colors
     var code by remember { mutableStateOf("") }
     val focus = LocalFocusManager.current
@@ -310,7 +374,11 @@ private fun HeroCard(onCreate: () -> Unit, onJoin: (String) -> Unit, busy: Boole
             Text("СМОТРИМ ВМЕСТЕ", style = Kicker, color = Color.White.copy(alpha = 0.85f))
             Text("Новая комната\nили по коду?", fontFamily = DisplayFont, fontSize = 22.sp, color = Color.White, lineHeight = 28.sp)
             Spacer(Modifier.height(16.dp))
-            MangaButton("Создать комнату", onCreate, kind = ButtonKind.YELLOW, icon = Icons.Rounded.Add, modifier = Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MangaButton("Создать комнату", onCreate, kind = ButtonKind.YELLOW, icon = Icons.Rounded.Add, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(10.dp))
+                RoundIcon(Icons.Rounded.QrCodeScanner, "Сканировать QR", onScan, size = 50.dp, color = m.paper2)
+            }
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 MangaPanel(Modifier.weight(1f).height(52.dp), color = m.paper2, radius = 14.dp, shadow = 3.dp) {

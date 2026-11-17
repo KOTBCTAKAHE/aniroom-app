@@ -20,6 +20,11 @@ data class AppPrefs(
     val autoPip: Boolean = true,
     val qualityMode: String = "auto",
     val dataSaver: Boolean = false,
+    val chatFont: String = "md",
+    val preferredDub: String = "",
+    val materialYou: Boolean = false,
+    val gestures: Boolean = true,
+    val clipboardHints: Boolean = true,
 )
 
 /** Token, cached user and device prefs. SharedPreferences keeps startup instant. */
@@ -51,6 +56,11 @@ object Session {
             autoPip = prefs.getBoolean("autoPip", true),
             qualityMode = prefs.getString("qualityMode", "auto") ?: "auto",
             dataSaver = prefs.getBoolean("dataSaver", false),
+            chatFont = prefs.getString("chatFont", "md") ?: "md",
+            preferredDub = prefs.getString("preferredDub", "") ?: "",
+            materialYou = prefs.getBoolean("materialYou", false),
+            gestures = prefs.getBoolean("gestures", true),
+            clipboardHints = prefs.getBoolean("clipboardHints", true),
         )
     }
 
@@ -85,8 +95,49 @@ object Session {
             .putBoolean("autoPip", p.autoPip)
             .putString("qualityMode", p.qualityMode)
             .putBoolean("dataSaver", p.dataSaver)
+            .putString("chatFont", p.chatFont)
+            .putString("preferredDub", p.preferredDub)
+            .putBoolean("materialYou", p.materialYou)
+            .putBoolean("gestures", p.gestures)
+            .putBoolean("clipboardHints", p.clipboardHints)
             .apply()
     }
+
+    /** Applies the account's synced client prefs (shared with the website). */
+    fun hydrateFromServer(user: User) {
+        val cp = user.clientPrefs ?: return
+        fun str(key: String) = (cp[key] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        fun bool(key: String) = (cp[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toBooleanStrictOrNull()
+        _appPrefs.update { p ->
+            p.copy(
+                theme = when (str("theme")) { "light" -> ThemeMode.LIGHT; "sepia" -> ThemeMode.SEPIA; "dark" -> ThemeMode.DARK; "system" -> ThemeMode.SYSTEM; else -> p.theme },
+                reactions = bool("reactions") ?: p.reactions,
+                chatToasts = bool("chatToasts") ?: p.chatToasts,
+                autoSkipOpening = bool("autoSkipOpening") ?: p.autoSkipOpening,
+                chatFont = str("chatFont") ?: p.chatFont,
+                preferredDub = str("preferredDub") ?: p.preferredDub,
+            )
+        }
+        updatePrefs { it }
+    }
+
+    fun clientPrefsJson(p: AppPrefs = _appPrefs.value) = obj(
+        "theme" to p.theme.name.lowercase(),
+        "reactions" to p.reactions,
+        "chatToasts" to p.chatToasts,
+        "autoSkipOpening" to p.autoSkipOpening,
+        "chatFont" to p.chatFont,
+        "preferredDub" to p.preferredDub,
+        "dataSaver" to p.dataSaver,
+    )
+
+    var lastUpdateCheck: Long
+        get() = prefs.getLong("lastUpdateCheck", 0)
+        set(value) { prefs.edit().putLong("lastUpdateCheck", value).apply() }
+
+    var skippedUpdate: Int
+        get() = prefs.getInt("skippedUpdate", 0)
+        set(value) { prefs.edit().putInt("skippedUpdate", value).apply() }
 
     fun watchedEpisodes(shikimoriId: String): Set<Int> {
         val userId = _user.value?.id ?: 0

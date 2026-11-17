@@ -71,5 +71,6 @@ jobs:
           make_latest: true
           files: out/*.apk
           body: |
-            Сборка AniRoom для Android №${{ github.run_number }}.
-            Скачай APK ниже и установи на телефон (разреши установку из неизвестных источников).
+            ${{ github.event.head_commit.message }}
+
+            Сборка №${{ github.run_number }}. Приложение само предложит обновиться.

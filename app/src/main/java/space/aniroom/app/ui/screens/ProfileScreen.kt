@@ -98,6 +98,8 @@ import space.aniroom.app.ui.components.SkeletonBox
 import space.aniroom.app.ui.components.Tag
 import space.aniroom.app.ui.components.UserAvatar
 import space.aniroom.app.ui.components.nickColor
+import space.aniroom.app.ui.components.NickText
+import space.aniroom.app.ui.components.CoverSwatch
 import space.aniroom.app.ui.theme.DisplayFont
 import space.aniroom.app.ui.theme.Kicker
 import space.aniroom.app.ui.theme.Manga
@@ -113,6 +115,8 @@ fun ProfileScreen(
     onBack: () -> Unit,
     openSettings: () -> Unit,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    openWardrobe: () -> Unit = {},
+    openEditor: () -> Unit = openSettings,
 ) {
     val m = Manga.colors
     val me by Session.user.collectAsState()
@@ -139,18 +143,12 @@ fun ProfileScreen(
         list = api { userList(userId, status) }.getOrDefault(AnimeListPage(hidden = true))
     }
 
+    var editUri by remember { mutableStateOf<Uri?>(null) }
     val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        avatarBusy = true
-        scope.launch {
-            val bytes = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }
-            if (bytes != null) {
-                val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-                val part = MultipartBody.Part.createFormData("file", "avatar.${mime.substringAfter('/')}", bytes.toRequestBody(mime.toMediaTypeOrNull()))
-                api { uploadAvatar(part) }.onSuccess { u -> Session.setUser(u); profile = profile?.copy(avatar = u.avatar) }.onFailure { error = it.message }
-            }
-            avatarBusy = false
-        }
+        if (uri != null) editUri = uri
+    }
+    editUri?.let { uri ->
+        AvatarEditorDialog(uri, onDismiss = { editUri = null }, onSaved = { u -> editUri = null; profile = profile?.copy(avatar = u.avatar) })
     }
 
     val p = profile
@@ -160,7 +158,7 @@ fun ProfileScreen(
     ) {
         item {
             Box(Modifier.fillMaxWidth().height(170.dp).background(m.red)) {
-                Halftone(Modifier.fillMaxSize(), alpha = 0.16f)
+                CoverSwatch(p?.profileCover ?: me?.profileCover.takeIf { isMe } ?: "default", Modifier.fillMaxSize())
                 Text(
                     "ANIROOM", fontFamily = DisplayFont, fontSize = 64.sp, color = Color.White.copy(alpha = 0.12f),
                     modifier = Modifier.align(Alignment.BottomEnd).offset(x = 20.dp, y = 14.dp).rotate(-6f), maxLines = 1,
@@ -176,10 +174,10 @@ fun ProfileScreen(
             Column(Modifier.fillMaxWidth().offset(y = (-48).dp).padding(horizontal = 16.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Box {
-                        UserAvatar(p?.avatar ?: me?.avatar.takeIf { isMe }, p?.username ?: "", size = 96.dp, color = p?.nicknameColor)
+                        UserAvatar(p?.avatar ?: me?.avatar.takeIf { isMe }, p?.username ?: "", size = 96.dp, color = p?.nicknameColor, frame = if (isMe) game?.equipped?.frame ?: p?.game?.frame else p?.game?.frame)
                         if (isMe) Box(
                             Modifier.align(Alignment.BottomEnd).size(32.dp).clip(CircleShape).background(m.yellow).border(2.dp, m.ink, CircleShape)
-                                .clickable(enabled = !avatarBusy) { pickAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                .clickable(enabled = !avatarBusy) { pickAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Rounded.CameraAlt, "Сменить аватар", tint = m.onYellow, modifier = Modifier.size(16.dp)) }
                     }
@@ -195,11 +193,34 @@ fun ProfileScreen(
                 if (p == null && error == null) SkeletonBox(Modifier.width(180.dp).height(28.dp))
                 p?.let { prof ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(prof.username, style = MaterialTheme.typography.headlineMedium, color = nickColor(prof.username, prof.nicknameColor), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        NickText(prof.username, nickColor(prof.username, prof.nicknameColor), prof.game?.nickFx, style = MaterialTheme.typography.headlineMedium, fontSize = 24.sp)
                         if (prof.specialTitle == "owner") { Spacer(Modifier.width(8.dp)); Tag("создатель", color = m.ink, textColor = m.paper) }
                     }
                     prof.game?.title?.let { Text(it, color = m.red, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                     prof.bio?.takeIf { it.isNotBlank() }?.let { Text(it, color = m.inkSoft, modifier = Modifier.padding(top = 6.dp)) }
+                    if (isMe) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            MangaButton("Редактировать", openEditor, compact = true, kind = ButtonKind.INK, icon = Icons.Rounded.Settings)
+                            MangaButton("Гардероб", openWardrobe, compact = true, kind = ButtonKind.YELLOW)
+                        }
+                    }
+                    if (prof.favorites.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text("ВИТРИНА", style = Kicker, color = m.red)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            prof.favorites.take(3).forEachIndexed { i, f ->
+                                MangaPanel(Modifier.weight(1f).aspectRatio(0.68f).rotate(listOf(-2f, 1.5f, -1f)[i]), radius = 10.dp, shadow = 3.dp) {
+                                    Poster(f.poster, Modifier.fillMaxSize(), radius = 0.dp)
+                                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = 0.6f)).padding(4.dp)) {
+                                        Text(f.title, color = Color.White, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                            repeat(3 - prof.favorites.take(3).size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
                     val since = parseInstant(prof.createdAt)?.let { java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", java.util.Locale("ru")).format(it.atZone(java.time.ZoneId.systemDefault())) }
                     since?.let { Text("с нами с $it", color = m.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
                     if (!isMe) {
@@ -391,85 +412,5 @@ private fun BadgeCard(badge: Badge, modifier: Modifier) {
             }
             if (badge.rarity.isNotBlank()) Text(badge.rarity, color = m.muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
         }
-    }
-}
-
-// --------------------------------------------------------------------------------------- settings
-
-@Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    val m = Manga.colors
-    val prefs by Session.appPrefs.collectAsState()
-    val user by Session.user.collectAsState()
-    val context = LocalContext.current
-    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    Column(
-        Modifier.fillMaxSize().background(m.paper).verticalScroll(rememberScrollState()).statusBarsPadding().navigationBarsPadding().padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("ПРИЛОЖЕНИЕ", style = Kicker, color = m.red)
-                Text("Настройки", style = MaterialTheme.typography.headlineMedium, color = m.ink)
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        Text("ТЕМА", style = Kicker, color = m.red)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(ThemeMode.SYSTEM to "Авто", ThemeMode.LIGHT to "Светлая", ThemeMode.SEPIA to "Сепия", ThemeMode.DARK to "Тёмная").forEach { (mode, label) ->
-                SelectChip(label, prefs.theme == mode, { Session.updatePrefs { it.copy(theme = mode) } })
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        Text("ПРОСМОТР", style = Kicker, color = m.red)
-        Spacer(Modifier.height(8.dp))
-        MangaPanel(Modifier.fillMaxWidth(), shadow = 3.dp) {
-            Column {
-                PrefRow("Пропускать опенинг сам", "Когда ты хост — прыжок через опенинг", prefs.autoSkipOpening) { v -> Session.updatePrefs { it.copy(autoSkipOpening = v) } }
-                PrefRow("Картинка в картинке", "Видео продолжится поверх других приложений", prefs.autoPip) { v -> Session.updatePrefs { it.copy(autoPip = v) } }
-                PrefRow("Экономия трафика", "Не выше 480p", prefs.dataSaver) { v -> Session.updatePrefs { it.copy(dataSaver = v) } }
-                PrefRow("Летящие реакции", "Показывать реакции других зрителей", prefs.reactions) { v -> Session.updatePrefs { it.copy(reactions = v) } }
-                PrefRow("Чат поверх плеера", "Новые сообщения в полноэкранном режиме", prefs.chatToasts) { v -> Session.updatePrefs { it.copy(chatToasts = v) } }
-                PrefRow("Вибрация", "Тактильный отклик на нажатия", prefs.haptics) { v -> Session.updatePrefs { it.copy(haptics = v) } }
-            }
-        }
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            Spacer(Modifier.height(16.dp))
-            MangaButton("Включить уведомления", { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }, kind = ButtonKind.YELLOW, modifier = Modifier.fillMaxWidth())
-        }
-        Spacer(Modifier.height(24.dp))
-        Text("АККАУНТ", style = Kicker, color = m.red)
-        Spacer(Modifier.height(8.dp))
-        MangaPanel(Modifier.fillMaxWidth(), shadow = 3.dp) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                UserAvatar(user?.avatar, user?.username ?: "?", size = 44.dp, color = user?.nicknameColor)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(user?.username ?: "", color = m.ink, fontWeight = FontWeight.Bold)
-                    Text(user?.email ?: "", color = m.muted, fontSize = 12.sp)
-                }
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        MangaButton("Выйти", { Session.signOut() }, kind = ButtonKind.PAPER, icon = Icons.AutoMirrored.Rounded.Logout, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(24.dp))
-        Text("AniRoom для Android · ${space.aniroom.app.BuildConfig.VERSION_NAME}", color = m.muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun PrefRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    val m = Manga.colors
-    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = m.ink, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = m.muted, fontSize = 12.sp)
-        }
-        Switch(
-            checked = checked, onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(checkedTrackColor = m.red, checkedThumbColor = Color.White, uncheckedTrackColor = m.paper3, uncheckedBorderColor = m.ink, uncheckedThumbColor = m.ink),
-        )
     }
 }

@@ -34,6 +34,19 @@ data class User(
     val bio: String? = null,
     val isAdmin: Boolean = false,
     val tzOffset: Int? = null,
+    val profileCover: String? = null,
+    val favoriteTitles: List<String> = emptyList(),
+    val usernameChangedAt: String? = null,
+    val listVisibility: String? = null,
+    val statusVisibility: String? = null,
+    val allowInvites: Boolean = true,
+    val allowFriendRequests: Boolean = true,
+    val notifyFriendWatching: Boolean = true,
+    val notifyNewEpisodes: Boolean = true,
+    val achievementsPublic: Boolean = true,
+    val dndFrom: String? = null,
+    val dndTo: String? = null,
+    val clientPrefs: JsonObject? = null,
 )
 
 @Serializable
@@ -276,6 +289,7 @@ data class PublicProfile(
     val isBlocked: Boolean = false,
     val isFriend: Boolean = false,
     val bio: String? = null,
+    val profileCover: String? = null,
     val favorites: List<FavoriteTitle> = emptyList(),
     val listVisible: Boolean = true,
     val canInvite: Boolean = false,
@@ -371,7 +385,36 @@ data class GameMe(
     val quests: QuestBoard? = null,
     val weekXp: Int = 0,
     val cosmetics: GameCosmetics? = null,
+    val titleKey: String? = null,
+    val equipped: Equipped = Equipped(),
+    val catalog: Catalog = Catalog(),
 )
+
+@Serializable
+data class Equipped(val titleKey: String? = null, val frame: String = "none", val bubble: String = "default", val nickFx: String = "none")
+
+@Serializable
+data class CatalogItem(val key: String, val name: String = "", val level: Int = 0, val unlocked: Boolean = false, val fromBadge: Boolean = false, val rarity: String? = null)
+
+@Serializable
+data class Catalog(
+    val frames: List<CatalogItem> = emptyList(),
+    val bubbles: List<CatalogItem> = emptyList(),
+    val nickFx: List<CatalogItem> = emptyList(),
+    val titles: List<CatalogItem> = emptyList(),
+)
+
+@Serializable
+data class BlockedUser(val id: Int, val username: String = "", val avatar: String? = null, val nicknameColor: String? = null, val blockedAt: String = "")
+
+@Serializable
+data class ShikimoriImportResult(val added: Int = 0, val updated: Int = 0, val unchanged: Int = 0, val total: Int = 0, val nickname: String = "")
+
+@Serializable
+data class GithubAsset(val name: String = "", val size: Long = 0, val browserDownloadUrl: String = "")
+
+@Serializable
+data class GithubRelease(val tagName: String = "", val name: String? = null, val body: String? = null, val publishedAt: String? = null, val assets: List<GithubAsset> = emptyList())
 
 @Serializable
 data class LeaderboardRow(

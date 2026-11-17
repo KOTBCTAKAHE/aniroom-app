@@ -221,9 +221,8 @@ fun RoundIcon(
 }
 
 fun nickColor(name: String, hex: String?): Color {
-    if (!hex.isNullOrBlank()) return parseColor(hex, Color(0xFFE2342A))
-    val palette = listOf(0xFFE2342A, 0xFF2F6FDF, 0xFF2E9E5B, 0xFFB86B00, 0xFF8E44AD, 0xFFD6336C, 0xFF0B8A8A, 0xFF5C6AC4)
-    return Color(palette[abs(name.hashCode()) % palette.size])
+    if (!hex.isNullOrBlank() && hex.uppercase() !in NICK_COLORS) return parseColor(hex, Color(0xFFE2342A))
+    return siteNickColor(name, hex)
 }
 
 @Composable
@@ -235,7 +234,12 @@ fun UserAvatar(
     color: String? = null,
     online: Boolean? = null,
     ring: Boolean = true,
+    frame: String? = null,
 ) {
+    if (!frame.isNullOrBlank() && frame != "none") {
+        AvatarFrame(frame, size, modifier) { UserAvatar(url, name, Modifier, size, color, online, ring, null) }
+        return
+    }
     val m = Manga.colors
     Box(modifier.size(size)) {
         val shape = CircleShape

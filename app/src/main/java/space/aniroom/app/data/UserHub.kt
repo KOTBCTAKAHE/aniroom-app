@@ -141,12 +141,19 @@ object UserHub {
     }
 
     private suspend fun refreshUser() {
-        api { me() }.onSuccess { Session.setUser(it) }.onFailure {
+        api { me() }.onSuccess { Session.setUser(it); Session.hydrateFromServer(it) }.onFailure {
             if ((it as? ApiException)?.code == 401) Session.signOut("Сессия истекла, войди снова")
         }
         refreshGame()
         refreshFriends()
     }
+
+    /** Pushes device prefs to the account so the website matches. */
+    fun syncPrefs() {
+        scope.launch { api { updatePreferences(obj("client_prefs" to Session.clientPrefsJson())) }.onSuccess { Session.setUser(it) } }
+    }
+
+    fun setGame(value: GameMe) { _game.value = value }
 
     suspend fun refreshGame() { api { gameMe() }.onSuccess { _game.value = it } }
     suspend fun refreshFriends() { api { friends() }.onSuccess { _friends.value = it } }

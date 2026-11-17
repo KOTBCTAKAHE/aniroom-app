@@ -107,8 +107,13 @@ private fun animated(c: Color): Color {
 }
 
 @Composable
-fun AniRoomTheme(mode: ThemeMode, content: @Composable () -> Unit) {
-    val target = resolveManga(mode)
+fun AniRoomTheme(mode: ThemeMode, materialYou: Boolean = false, content: @Composable () -> Unit) {
+    val base = resolveManga(mode)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val target = if (materialYou && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        val dyn = if (base.isDark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
+        base.copy(red = dyn.primary, redDeep = dyn.primary, yellow = dyn.tertiaryContainer, onYellow = dyn.onTertiaryContainer)
+    } else base
     val m = target.copy(
         paper = animated(target.paper), paper2 = animated(target.paper2), paper3 = animated(target.paper3),
         ink = animated(target.ink), inkSoft = animated(target.inkSoft), muted = animated(target.muted),
