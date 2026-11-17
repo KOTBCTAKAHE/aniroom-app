@@ -228,9 +228,7 @@ fun ChatPanel(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
                     }
                 }
             }
-            AnimatedVisibility(showJump, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-                RoundIcon(Icons.Rounded.KeyboardArrowDown, "Вниз", { scope.launch { list.animateScrollToItem(0) } }, color = m.yellow, tint = m.onYellow)
-            }
+            JumpButton(showJump, Modifier.align(Alignment.BottomEnd).padding(12.dp)) { scope.launch { list.animateScrollToItem(0) } }
         }
 
         AnimatedVisibility(replyTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -296,6 +294,14 @@ fun ChatPanel(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
                 Icon(Icons.AutoMirrored.Rounded.Send, "Отправить", tint = if (canSend) Color.White else m.muted, modifier = Modifier.size(20.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun JumpButton(visible: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val m = Manga.colors
+    AnimatedVisibility(visible, modifier = modifier, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+        RoundIcon(Icons.Rounded.KeyboardArrowDown, "Вниз", onClick, color = m.yellow, tint = m.onYellow)
     }
 }
 

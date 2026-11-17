@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -90,7 +89,7 @@ object UserHub {
     fun start(context: Context) {
         appContext = context.applicationContext
         scope.launch {
-            Session.token.distinctUntilChanged().collect { token ->
+            Session.token.collect { token ->
                 socket?.disconnect()
                 socket = null
                 poller?.cancel()

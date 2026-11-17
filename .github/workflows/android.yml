@@ -42,9 +42,15 @@ jobs:
       - name: Report compiler errors
         if: failure()
         run: |
-          grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log | head -80 | while IFS= read -r line; do
-            echo "::error::${line//%/%25}"
-          done
+          python3 - <<'PY'
+          import re
+          lines = [l.rstrip() for l in open("build.log", errors="replace") if re.match(r"^(e: |w: .*deprecated)", l) or "What went wrong" in l]
+          errs = [l.replace("file:///home/runner/work/aniroom-app/aniroom-app/app/src/main/java/space/aniroom/app/", "") for l in lines if l.startswith("e: ")] or lines[:20]
+          chunk = []
+          for i in range(0, len(errs), 15):
+              msg = "%0A".join(e.replace("%", "%25") for e in errs[i:i+15])
+              print(f"::error::{msg}")
+          PY
 
       - name: Rename APK
         run: |
