@@ -446,6 +446,49 @@ data class LeaderboardRow(
     val weekEpisodes: Int = 0,
     val isMe: Boolean = false,
     val rank: Int = 0,
+    val cosmetics: GameCosmetics? = null,
+)
+
+@Serializable
+data class RecapTitle(val title: String = "", val watchSeconds: Double = 0.0, val poster: String? = null)
+
+@Serializable
+data class RecapBadge(val key: String = "", val title: String = "")
+
+@Serializable
+data class RecapBestDay(val date: String = "", val watchSeconds: Double = 0.0)
+
+@Serializable
+data class RecapCompanion(
+    val userId: Int = 0,
+    val username: String = "",
+    val nicknameColor: String? = null,
+    val avatar: String? = null,
+    val hours: Double = 0.0,
+    val name: String = "",
+)
+
+@Serializable
+data class MonthRecap(
+    val month: String = "",
+    val monthName: String = "",
+    val username: String = "",
+    val nicknameColor: String? = null,
+    val watchSeconds: Double = 0.0,
+    val episodes: Int = 0,
+    val daysActive: Int = 0,
+    val xp: Int = 0,
+    val level: Int = 1,
+    val questsDone: Int = 0,
+    val ratings: Int = 0,
+    val messages: Int = 0,
+    val reactions: Int = 0,
+    val favoriteReaction: String? = null,
+    val badges: List<RecapBadge> = emptyList(),
+    val bestDay: RecapBestDay? = null,
+    val topTitles: List<RecapTitle> = emptyList(),
+    val companion: RecapCompanion? = null,
+    val bestStreak: Int = 0,
 )
 
 @Serializable

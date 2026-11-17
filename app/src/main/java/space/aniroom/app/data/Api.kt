@@ -69,6 +69,7 @@ interface AniApi {
     @GET("users/blocks") suspend fun blockedUsers(): List<BlockedUser>
     @POST("users/me/list/import/shikimori") suspend fun importShikimori(@Body body: JsonObject): ShikimoriImportResult
     @GET("game/leaderboard") suspend fun leaderboard(): Leaderboard
+    @GET("game/recap") suspend fun monthRecap(@Query("month") month: String?): MonthRecap
 
     @GET("users/{id}") suspend fun publicProfile(@Path("id") id: Int): PublicProfile
     @GET("users/{id}/stats") suspend fun profileStats(@Path("id") id: Int): ProfileStats
@@ -116,6 +117,7 @@ interface AniApi {
     @POST("stickers")
     suspend fun uploadSticker(@Part file: MultipartBody.Part, @Part("name") name: RequestBody): Sticker
     @DELETE("stickers/{id}") suspend fun deleteSticker(@Path("id") id: Int)
+    @PATCH("stickers/{id}") suspend fun renameSticker(@Path("id") id: Int, @Body body: JsonObject): Sticker
 
     @GET("anime/search") suspend fun animeSearch(@Query("q") q: String, @Query("limit") limit: Int = 20): AnimeSearchWrapper
     @GET("anime/title/{sid}") suspend fun animeTitle(@Path("sid") id: String): AnimeFullPage

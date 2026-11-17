@@ -97,6 +97,7 @@ object UserHub {
                 _items.value = emptyList()
                 _game.value = null
                 _friends.value = emptyList()
+                StickerStore.clear()
                 if (token != null) connect(token)
             }
         }

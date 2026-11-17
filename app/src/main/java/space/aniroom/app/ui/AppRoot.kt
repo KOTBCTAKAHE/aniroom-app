@@ -143,7 +143,7 @@ fun AppRoot() {
                 "user/{id}?tab={tab}",
                 arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("tab") { type = NavType.StringType; nullable = true; defaultValue = null }),
             ) { entry ->
-                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, initialTab = if (entry.arguments?.getString("tab") == "badges") 1 else 0, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") }, openWardrobe = { nav.navigate("settings/WARDROBE") })
+                ProfileScreen(entry.arguments?.getInt("id") ?: 0, isTab = false, initialTab = when (entry.arguments?.getString("tab")) { "badges" -> 1; "leaderboard" -> 3; "recap" -> 4; else -> 0 }, openUser = { nav.navigate("user/$it") }, onBack = { nav.popBackStack() }, openSettings = { nav.navigate("settings") }, openWardrobe = { nav.navigate("settings/WARDROBE") })
             }
             composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
             composable("settings/{section}") { entry -> SettingsScreen(onBack = { nav.popBackStack() }, initial = entry.arguments?.getString("section")) }
@@ -192,7 +192,7 @@ private fun MainScreen(openRoom: (String) -> Unit, openUser: (Int) -> Unit, open
                 Tab.HOME -> HomeTab(openRoom, openSettings, openProfile = { tab = Tab.PROFILE }, contentPadding = padding)
                 Tab.FRIENDS -> FriendsTab(openUser, openRoom, padding)
                 Tab.ALERTS -> NotificationsTab(openRoom, openProfile = { tab = Tab.PROFILE }, openFriends = { tab = Tab.FRIENDS }, contentPadding = padding)
-                Tab.PROFILE -> ProfileScreen(user?.id ?: 0, isTab = true, onBack = { tab = Tab.HOME }, openSettings = openSettings, contentPadding = padding, openWardrobe = { openSection("WARDROBE") }, openEditor = { openSection("PROFILE") })
+                Tab.PROFILE -> ProfileScreen(user?.id ?: 0, isTab = true, onBack = { tab = Tab.HOME }, openSettings = openSettings, contentPadding = padding, openWardrobe = { openSection("WARDROBE") }, openEditor = { openSection("PROFILE") }, openUser = openUser)
             }
         }
         BottomBar(tab, unread, Modifier.align(Alignment.BottomCenter)) { tab = it }

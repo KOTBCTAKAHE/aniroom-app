@@ -26,6 +26,7 @@ data class AppPrefs(
     val gestures: Boolean = true,
     val clipboardHints: Boolean = true,
     val achievementSound: Boolean = true,
+    val chatSound: Boolean = true,
 )
 
 /** Token, cached user and device prefs. SharedPreferences keeps startup instant. */
@@ -63,6 +64,7 @@ object Session {
             gestures = prefs.getBoolean("gestures", true),
             clipboardHints = prefs.getBoolean("clipboardHints", true),
             achievementSound = prefs.getBoolean("achievementSound", true),
+            chatSound = prefs.getBoolean("chatSound", true),
         )
     }
 
@@ -103,6 +105,7 @@ object Session {
             .putBoolean("gestures", p.gestures)
             .putBoolean("clipboardHints", p.clipboardHints)
             .putBoolean("achievementSound", p.achievementSound)
+            .putBoolean("chatSound", p.chatSound)
             .apply()
     }
 
@@ -119,6 +122,7 @@ object Session {
                 chatFont = str("chatFont") ?: p.chatFont,
                 preferredDub = str("preferredDub") ?: p.preferredDub,
                 achievementSound = bool("achievementSound") ?: p.achievementSound,
+                chatSound = bool("chatSound") ?: p.chatSound,
             )
         }
         updatePrefs { it }
@@ -133,6 +137,7 @@ object Session {
         "preferredDub" to p.preferredDub,
         "dataSaver" to p.dataSaver,
         "achievementSound" to p.achievementSound,
+        "chatSound" to p.chatSound,
     )
 
     var lastUpdateCheck: Long

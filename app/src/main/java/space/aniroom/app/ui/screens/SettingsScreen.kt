@@ -690,6 +690,11 @@ private fun LookSection() {
         Segmented(listOf("sm" to "Мелкий", "md" to "Обычный", "lg" to "Крупный"), prefs.chatFont) { v -> Session.updatePrefs { it.copy(chatFont = v) }; UserHub.syncPrefs() }
         SwitchRow("Сообщения поверх видео", "В полноэкранном режиме", prefs.chatToasts) { v -> Session.updatePrefs { it.copy(chatToasts = v) }; UserHub.syncPrefs() }
         SwitchRow("Вибрация", "Тактильный отклик на нажатия и реакции", prefs.haptics) { v -> Session.updatePrefs { it.copy(haptics = v) } }
+        SwitchRow("Звук новых сообщений", "Тихий «тук-тук», когда пишут другие", prefs.chatSound) { v ->
+            Session.updatePrefs { it.copy(chatSound = v) }
+            UserHub.syncPrefs()
+            if (v) space.aniroom.app.util.Sounds.chat()
+        }
         SwitchRow("Звук достижений", "Короткий сигнал и анимация при новой награде", prefs.achievementSound) { v ->
             Session.updatePrefs { it.copy(achievementSound = v) }
             UserHub.syncPrefs()

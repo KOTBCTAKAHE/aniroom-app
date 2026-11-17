@@ -253,7 +253,7 @@ private fun AchievementCard(a: GameEvent.Achievement, onDismiss: () -> Unit, onO
                 Box(contentAlignment = Alignment.Center) {
                     if (rarity == "legendary" || rarity == "rare") Sparks(Modifier.size(110.dp), if (rarity == "legendary") Gold else m.blue, if (rarity == "legendary") 10 else 6)
                     if (a.season) Ripples(Modifier.size(100.dp), Gold)
-                    Medal(rarity, shard, a.completedSeasons, a.totalSeasons, completed = !a.season)
+                    Medal(rarity, shard, a.completedSeasons, a.totalSeasons, completed = !a.season, key = a.key, icon = a.icon)
                 }
                 Spacer(Modifier.width(12.dp))
                 val onDark = rarity == "legendary"
@@ -291,7 +291,7 @@ private fun AchievementCard(a: GameEvent.Achievement, onDismiss: () -> Unit, onO
 }
 
 @Composable
-private fun Medal(rarity: String, shard: Boolean, seasons: Int, totalSeasons: Int, completed: Boolean) {
+private fun Medal(rarity: String, shard: Boolean, seasons: Int, totalSeasons: Int, completed: Boolean, key: String = "", icon: String = "") {
     val m = Manga.colors
     val pop = remember { Animatable(0f) }
     val check = remember { Animatable(0f) }
@@ -323,10 +323,9 @@ private fun Medal(rarity: String, shard: Boolean, seasons: Int, totalSeasons: In
                 )
             }
         }
-        if (!shard) Text(
-            when (rarity) { "legendary" -> "👑"; "rare" -> "💎"; else -> "🏆" },
-            fontSize = 26.sp, modifier = Modifier.align(Alignment.Center),
-        )
+        if (!shard) Box(Modifier.align(Alignment.Center)) {
+            BadgeIcon(key, icon, 28.dp, if (rarity == "rare") Color.White else Color(0xFF141210))
+        }
         if (completed) Box(
             Modifier.align(Alignment.BottomEnd).offset(4.dp, 4.dp).size(24.dp)
                 .graphicsLayer { scaleX = check.value; scaleY = check.value; rotationZ = (1f - check.value) * -90f }
@@ -337,7 +336,7 @@ private fun Medal(rarity: String, shard: Boolean, seasons: Int, totalSeasons: In
 }
 
 /** Re:Zero crystal shard (gold for seasons, silver for loops). */
-private fun DrawScope.drawShard(gold: Boolean, seasons: Int, total: Int, shine: Float) {
+internal fun DrawScope.drawShard(gold: Boolean, seasons: Int, total: Int, shine: Float) {
     val w = size.width
     val h = size.height
     val path = Path().apply {

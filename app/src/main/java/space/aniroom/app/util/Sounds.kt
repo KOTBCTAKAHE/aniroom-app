@@ -47,7 +47,51 @@ object Sounds {
             .build()
         p.setOnLoadCompleteListener { _, sampleId, status -> if (status == 0) loaded += sampleId }
         FILES.forEach { (key, res) -> ids[key] = p.load(app, res, 1) }
+        runCatching { chatId = p.load(chatTone(app).absolutePath, 1) }
         pool = p
+    }
+
+    private var chatId = 0
+    private var lastChat = 0L
+
+    /** The site's «тук-тук»: two short triangle notes, 660 Hz then 880 Hz (prefs.ts → playChatSound). */
+    private fun chatTone(context: Context): java.io.File {
+        val file = java.io.File(context.cacheDir, "chat_tone_v1.wav")
+        if (file.exists()) return file
+        val rate = 44100
+        val total = (rate * 0.26).toInt()
+        val pcm = ShortArray(total)
+        listOf(660.0 to 0.0, 880.0 to 0.09).forEach { (freq, start) ->
+            val s0 = (start * rate).toInt()
+            val len = (0.16 * rate).toInt()
+            for (i in 0 until len) {
+                val idx = s0 + i
+                if (idx >= total) break
+                val t = i.toDouble() / rate
+                // exponential attack to peak in 15 ms, exponential decay to silence by 140 ms
+                val env = if (t < 0.015) Math.pow(0.0001 / 0.06, 1 - t / 0.015) else Math.pow(0.0001 / 0.06, ((t - 0.015) / 0.125).coerceAtMost(1.0))
+                val phase = (t * freq) % 1.0
+                val tri = 4 * Math.abs(phase - 0.5) - 1
+                val v = pcm[idx] + (tri * env * 0.42 * Short.MAX_VALUE).toInt()
+                pcm[idx] = v.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            }
+        }
+        val data = java.nio.ByteBuffer.allocate(44 + total * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        data.put("RIFF".toByteArray()).putInt(36 + total * 2).put("WAVE".toByteArray())
+        data.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(rate).putInt(rate * 2).putShort(2).putShort(16)
+        data.put("data".toByteArray()).putInt(total * 2)
+        pcm.forEach { data.putShort(it) }
+        file.writeBytes(data.array())
+        return file
+    }
+
+    fun chat() {
+        if (!Session.appPrefs.value.chatSound) return
+        val now = System.currentTimeMillis()
+        if (now - lastChat < 350) return
+        lastChat = now
+        val p = pool ?: return
+        if (chatId != 0 && chatId in loaded) p.play(chatId, 0.7f, 0.7f, 0, 0, 1f)
     }
 
     private fun resolve(rarity: String?, key: String?): String {

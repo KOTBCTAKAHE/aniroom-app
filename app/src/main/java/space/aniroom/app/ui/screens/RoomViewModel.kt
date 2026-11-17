@@ -493,7 +493,10 @@ class RoomViewModel(app: Application, val roomCode: String) : AndroidViewModel(a
             val list = if (index >= 0) state.messages.toMutableList().also { it[index] = message } else state.messages + message
             state.copy(messages = list.takeLast(400))
         }
-        if (isNew && message.userId != me?.id) _incoming.tryEmit(message)
+        if (isNew && message.userId != me?.id) {
+            _incoming.tryEmit(message)
+            space.aniroom.app.util.Sounds.chat()
+        }
     }
 
     private fun applyPayload(payload: SyncState) {

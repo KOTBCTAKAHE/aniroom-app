@@ -251,7 +251,7 @@ fun ChatPanel(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
         }
 
         AnimatedVisibility(stickersOpen, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            StickerTray(vm, ui) { sticker ->
+            StickerTrayContent { sticker ->
                 vm.sendSticker(sticker)
                 haptic(false)
                 stickersOpen = false
@@ -264,7 +264,7 @@ fun ChatPanel(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
         ) {
             RoundIcon(
                 Icons.Rounded.EmojiEmotions, "Стикеры",
-                { stickersOpen = !stickersOpen; if (stickersOpen) vm.loadStickers() },
+                { stickersOpen = !stickersOpen },
                 color = if (stickersOpen) m.yellow else m.paper2, tint = if (stickersOpen) m.onYellow else m.ink, size = 44.dp,
             )
             Spacer(Modifier.width(8.dp))
@@ -507,31 +507,6 @@ private fun MessageRow(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StickerTray(vm: RoomViewModel, ui: RoomUi, onPick: (space.aniroom.app.data.Sticker) -> Unit) {
-    val m = Manga.colors
-    val stickers = ui.stickers
-    Box(Modifier.fillMaxWidth().height(96.dp).background(m.paper3)) {
-        when {
-            stickers == null -> LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(6) { SkeletonBox(Modifier.size(72.dp)) }
-            }
-            stickers.isEmpty() -> Text(
-                "Стикеров пока нет — их можно загрузить на сайте",
-                color = m.muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp), textAlign = TextAlign.Center,
-            )
-            else -> LazyRow(contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(stickers, key = { it.id }) { s ->
-                    AsyncImage(
-                        model = Api.media(s.image), contentDescription = s.name, contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(m.paper2).clickable { onPick(s) }.padding(4.dp),
-                    )
                 }
             }
         }

@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -119,6 +120,7 @@ fun ProfileScreen(
     openWardrobe: () -> Unit = {},
     openEditor: () -> Unit = openSettings,
     initialTab: Int = 0,
+    openUser: (Int) -> Unit = {},
 ) {
     var selectedBadge by remember { mutableStateOf<Badge?>(null) }
     selectedBadge?.let { b -> BadgeModal(b) { selectedBadge = null } }
@@ -291,10 +293,14 @@ fun ProfileScreen(
             }
         }
         item {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SelectChip("Список", tab == 0, { tab = 0 })
                 SelectChip("Ачивки ${badges?.count { it.earned && !it.isSpecial }?.let { "· $it" } ?: ""}", tab == 1, { tab = 1 })
                 SelectChip("Топ", tab == 2, { tab = 2 })
+                if (isMe) {
+                    SelectChip("Рейтинг недели", tab == 3, { tab = 3 })
+                    SelectChip("Итоги месяца", tab == 4, { tab = 4 })
+                }
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -344,6 +350,8 @@ fun ProfileScreen(
                     }
                 }
             }
+            3 -> item { LeaderboardCard(Modifier.padding(horizontal = 16.dp), openUser = openUser) }
+            4 -> item { RecapSection(Modifier.padding(horizontal = 16.dp)) }
             else -> {
                 val top = stats?.topAnime.orEmpty()
                 if (top.isEmpty()) item { EmptyState("Пока пусто", "Здесь будут самые просматриваемые тайтлы", mood = MascotMood.SEARCH) }
@@ -405,7 +413,7 @@ private fun BadgeCard(badge: Badge, modifier: Modifier, onClick: () -> Unit) {
     MangaPanel(modifier, color = if (badge.earned) m.paper2 else m.paper3, shadow = if (badge.earned) 3.dp else 1.dp, onClick = onClick) {
         Column(Modifier.padding(12.dp)) {
             Box(Modifier.size(38.dp).clip(CircleShape).background(if (badge.earned) rarityColor else m.paper).border(2.dp, m.ink, CircleShape), contentAlignment = Alignment.Center) {
-                Text(if (badge.earned) "★" else "?", fontWeight = FontWeight.Black, color = m.ink)
+                space.aniroom.app.ui.components.BadgeIcon(badge.key, badge.icon, 20.dp, if (badge.earned && rarityColor == m.blue) Color.White else m.ink, locked = !badge.earned, hidden = badge.secret && !badge.earned)
             }
             Spacer(Modifier.height(8.dp))
             Text(badge.title, color = if (badge.earned) m.ink else m.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -447,7 +455,12 @@ private fun BadgeModal(badge: Badge, onClose: () -> Unit) {
                         Modifier.size(96.dp).graphicsLayer { rotationY = spin.value; cameraDistance = 12f * density }
                             .clip(CircleShape).background(if (badge.earned) rarityColor else m.paper3).border(3.dp, m.ink, CircleShape),
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (!badge.earned) "?" else if (legendary) "👑" else if (rare) "💎" else "🏆", fontSize = 40.sp) }
+                    ) {
+                        space.aniroom.app.ui.components.BadgeIcon(
+                            badge.key, badge.icon, 44.dp, if (badge.earned && rare && !legendary) Color.White else m.ink,
+                            locked = !badge.earned, hidden = badge.secret && !badge.earned,
+                        )
+                    }
                     Spacer(Modifier.height(14.dp))
                     val onDark = legendary && badge.earned
                     Text(if (badge.earned) "ПОЛУЧЕНО" else "ЕЩЁ НЕ ОТКРЫТО", style = Kicker, color = if (onDark) Color(0xFFFFC83A) else m.red)
