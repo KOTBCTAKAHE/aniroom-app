@@ -419,6 +419,80 @@ private fun PlayerArea(
             PauseScreen(who = if (owner) "Ты" else hostName, isOwner = owner, compact = !isFull)
         }
 
+        // Controls overlay
+        AnimatedVisibility(controls, enter = fadeIn(tween(180)), exit = fadeOut(tween(250)), modifier = Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().height(90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent))))
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(110.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))))
+                // top bar
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp).then(if (isFull) Modifier.statusBarsPadding() else Modifier),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OverlayButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
+                    Spacer(Modifier.width(6.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(anime?.title ?: room.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
+                        val sub = listOfNotNull(
+                            anime?.episode?.takeIf { it > 0 }?.let { "Серия $it" + ((anime?.episodesTotal ?: 0).takeIf { t -> t > 0 }?.let { t -> " из $t" } ?: "") },
+                            anime?.translationName,
+                        ).joinToString(" · ")
+                        if (sub.isNotEmpty()) Text(sub, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
+                    }
+                    SyncBadge(ui, owner) { vm.syncToHost() }
+                    if (PipState.supported(LocalContext.current)) {
+                        Spacer(Modifier.width(4.dp))
+                        OverlayButton(Icons.Rounded.PictureInPictureAlt, "Картинка в картинке") { PipState.enter(context.findActivity(), progress.isPlaying, owner) }
+                    }
+                }
+                // center play/pause
+                if (hasSource && ui.animeLoading == null && !progress.buffering) {
+                    val playing = progress.isPlaying || (vm.player.playWhenReady && !owner)
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .size(if (isFull) 74.dp else 62.dp)
+                            .clip(CircleShape)
+                            .background(m.red.copy(alpha = 0.92f))
+                            .border(3.dp, Color.Black, CircleShape)
+                            .clickable {
+                                haptic(false)
+                                if (!vm.togglePlay()) {
+                                    if (ui.sync?.playing == true && !progress.isPlaying) vm.syncToHost() else denied()
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnimatedContent(playing, transitionSpec = { scaleIn() + fadeIn() togetherWith scaleOut() + fadeOut() }, label = "pp") { p ->
+                            Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Пауза" else "Play", tint = Color.White, modifier = Modifier.size(36.dp))
+                        }
+                    }
+                }
+                // bottom bar
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 4.dp)
+                        .then(if (isFull) Modifier.navigationBarsPadding() else Modifier),
+                ) {
+                    SeekBar(vm, progress, owner, ::denied)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${formatTime(progress.positionSec)} / ${formatTime(progress.durationSec)}",
+                            color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                        )
+                        SpeedMenu(vm, progress)
+                        QualityMenu(vm, progress)
+                        if (isFull) Box {
+                            OverlayButton(Icons.AutoMirrored.Rounded.Chat, "Чат") { chatOpen = !chatOpen }
+                            if (chatUnread > 0 && !chatOpen) Box(
+                                Modifier.align(Alignment.TopEnd).clip(CircleShape).background(m.red).padding(horizontal = 5.dp),
+                            ) { Text(if (chatUnread > 9) "9+" else "$chatUnread", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                        }
+                        OverlayButton(if (isFull) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Во весь экран", onToggleFull)
+                    }
+                }
+            }
+        }
+
         // Skip opening / next episode chips (host)
         val segments = anime?.skipSegments.orEmpty()
         val opening = segments.firstOrNull()

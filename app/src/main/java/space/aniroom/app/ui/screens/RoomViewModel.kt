@@ -795,6 +795,7 @@ class RoomViewModel(app: Application, val roomCode: String) : AndroidViewModel(a
             control("pause")
         } else {
             if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            if (player.playbackState == Player.STATE_IDLE) player.prepare()
             player.play()
             control("play")
         }
