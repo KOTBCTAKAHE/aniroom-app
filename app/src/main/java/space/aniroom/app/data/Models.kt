@@ -187,7 +187,26 @@ data class AnimeSearchResult(
 }
 
 @Serializable
-data class AnimeTranslation(val id: String, val type: String? = null, val name: String? = null, val seriesRange: String? = null)
+data class AnimeTranslation(
+    val id: String,
+    val type: String? = null,
+    val name: String? = null,
+    /** The API sends either "1-37" or [1, 37]. */
+    val seriesRange: JsonElement? = null,
+) {
+    val seriesText: String?
+        get() = when (val r = seriesRange) {
+            is kotlinx.serialization.json.JsonArray -> r.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.let { parts ->
+                when {
+                    parts.isEmpty() -> null
+                    parts.size == 1 || parts.first() == parts.last() -> "${parts.first()} сер."
+                    else -> "${parts.first()}–${parts.last()} сер."
+                }
+            }
+            is JsonPrimitive -> r.contentOrNull?.takeIf { it.isNotBlank() && it != "null" }
+            else -> null
+        }
+}
 
 @Serializable
 data class AnimeTranslations(val translations: List<AnimeTranslation> = emptyList(), val seriesCount: Int = 0)

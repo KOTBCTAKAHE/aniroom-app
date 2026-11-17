@@ -317,7 +317,7 @@ private fun TitleSetup(item: AnimeSearchResult, confirmText: String, onBack: () 
                     ) {
                         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(t.name ?: "Озвучка", color = if (active) m.paper else m.ink, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            t.seriesRange?.let { Text(it, color = if (active) m.paper.copy(alpha = 0.7f) else m.muted, fontSize = 12.sp) }
+                            t.seriesText?.let { Text(it, color = if (active) m.paper.copy(alpha = 0.7f) else m.muted, fontSize = 12.sp) }
                         }
                     }
                 }

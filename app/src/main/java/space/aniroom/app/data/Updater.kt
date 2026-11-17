@@ -53,7 +53,7 @@ object Updater {
         Session.lastUpdateCheck = System.currentTimeMillis()
         result.onSuccess { release ->
             val version = release.tagName.substringAfterLast('-').toIntOrNull() ?: 0
-            val apk = release.assets.firstOrNull { it.name.endsWith(".apk") }
+            val apk = release.assets.firstOrNull { it.name.endsWith(".apk") && it.name != "AniRoom.apk" } ?: release.assets.firstOrNull { it.name.endsWith(".apk") }
             _state.value = if (version > currentVersion && apk != null && (force || Session.skippedUpdate != version)) {
                 UpdateState.Available(version, release.body.orEmpty().trim(), apk.browserDownloadUrl, apk.size)
             } else UpdateState.UpToDate
