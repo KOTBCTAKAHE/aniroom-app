@@ -1,0 +1,949 @@
+package space.aniroom.app.ui.screens
+
+import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import space.aniroom.app.BuildConfig
+import space.aniroom.app.data.LinkStatus
+import space.aniroom.app.data.Message
+import space.aniroom.app.data.Session
+import space.aniroom.app.ui.components.ButtonKind
+import space.aniroom.app.ui.components.EmptyState
+import space.aniroom.app.ui.components.LoadingScreen
+import space.aniroom.app.ui.components.MangaButton
+import space.aniroom.app.ui.components.MangaPanel
+import space.aniroom.app.ui.components.Mascot
+import space.aniroom.app.ui.components.MascotMood
+import space.aniroom.app.ui.components.RoundIcon
+import space.aniroom.app.ui.components.UserAvatar
+import space.aniroom.app.ui.components.nickColor
+import space.aniroom.app.ui.theme.DisplayFont
+import space.aniroom.app.ui.theme.Kicker
+import space.aniroom.app.ui.theme.Manga
+import space.aniroom.app.util.PipState
+import space.aniroom.app.util.findActivity
+import space.aniroom.app.util.formatTime
+import space.aniroom.app.util.plural
+import space.aniroom.app.util.rememberHaptic
+import kotlin.math.abs
+import kotlin.math.sin
+
+@Composable
+fun RoomScreen(code: String, onBack: () -> Unit, openUser: (Int) -> Unit) {
+    val context = LocalContext.current
+    val app = context.applicationContext as Application
+    val vm: RoomViewModel = viewModel(key = "room-$code", factory = viewModelFactory { initializer { RoomViewModel(app, code) } })
+    val ui by vm.ui.collectAsState()
+    val progress by vm.progress.collectAsState()
+    val inPip by PipState.inPip.collectAsState()
+    val activity = context.findActivity()
+    val view = LocalView.current
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var lockedPortrait by rememberSaveable { mutableStateOf(false) }
+    val isFull = landscape
+
+    // Orientation / immersive handling
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.window?.let { w -> WindowInsetsControllerCompat(w, w.decorView).show(WindowInsetsCompat.Type.systemBars()) }
+            PipState.update(activity, false)
+        }
+    }
+    LaunchedEffect(isFull) {
+        val w = activity?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(w, w.decorView)
+        if (isFull) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else controller.show(WindowInsetsCompat.Type.systemBars())
+    }
+    // Keep screen awake while watching; allow PiP while playing.
+    DisposableEffect(progress.isPlaying) {
+        view.keepScreenOn = progress.isPlaying
+        PipState.update(activity, progress.isPlaying && Session.appPrefs.value.autoPip)
+        onDispose { view.keepScreenOn = false }
+    }
+    LaunchedEffect(Unit) {
+        vm.events.collect { event ->
+            if (event.startsWith("kicked:")) {
+                Toast.makeText(context, event.removePrefix("kicked:"), Toast.LENGTH_LONG).show()
+                onBack()
+            }
+        }
+    }
+
+    fun enterFull() {
+        lockedPortrait = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    fun exitFull() {
+        lockedPortrait = true
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+    }
+    LaunchedEffect(lockedPortrait, landscape) {
+        // After an explicit exit, give the phone back its sensor once it's held upright again.
+        if (lockedPortrait && !landscape) {
+            delay(2500)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            lockedPortrait = false
+        }
+    }
+
+    BackHandler(isFull) { exitFull() }
+
+    if (ui.loading) {
+        LoadingScreen("Подключаю комнату…")
+        return
+    }
+    if (ui.room == null) {
+        Box(Modifier.fillMaxSize().background(Manga.colors.paper).statusBarsPadding(), contentAlignment = Alignment.Center) {
+            EmptyState("Не удалось открыть комнату", ui.loadError ?: "Проверь код или соединение", mood = MascotMood.SHOCK) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MangaButton("Назад", onBack, kind = ButtonKind.PAPER)
+                    MangaButton("Повторить", { vm.load() }, icon = Icons.Rounded.Refresh)
+                }
+            }
+        }
+        return
+    }
+
+    if (inPip) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            PlayerSurface(vm, Modifier.fillMaxSize())
+            FlyingLayer(vm, Modifier.fillMaxSize())
+        }
+        return
+    }
+
+    if (isFull) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            PlayerArea(vm, ui, progress, isFull = true, onToggleFull = ::exitFull, onBack = ::exitFull, modifier = Modifier.fillMaxSize())
+        }
+        return
+    }
+
+    val m = Manga.colors
+    Column(Modifier.fillMaxSize().background(m.paper)) {
+        Box(Modifier.background(Color.Black).statusBarsPadding()) {
+            PlayerArea(
+                vm, ui, progress, isFull = false, onToggleFull = ::enterFull, onBack = onBack,
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            )
+        }
+        Column(Modifier.weight(1f).navigationBarsPadding().imePadding()) {
+            RoomHeader(vm, ui)
+            ReactionBar(vm)
+            EndCardPanel(vm, ui, progress)
+            ResumePrompt(vm, ui)
+            RoomTabs(vm, ui, openUser)
+        }
+    }
+}
+
+// --------------------------------------------------------------------------------------- player
+
+@Composable
+private fun PlayerSurface(vm: RoomViewModel, modifier: Modifier) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                setKeepContentOnPlayerReset(true)
+                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                player = vm.player
+            }
+        },
+        update = { it.player = vm.player },
+        onRelease = { it.player = null },
+    )
+}
+
+@Composable
+private fun PlayerArea(
+    vm: RoomViewModel,
+    ui: RoomUi,
+    progress: PlayerProgress,
+    isFull: Boolean,
+    onToggleFull: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier,
+) {
+    val m = Manga.colors
+    val context = LocalContext.current
+    val haptic = rememberHaptic()
+    var controls by remember { mutableStateOf(true) }
+    var seekFlash by remember { mutableStateOf<Pair<Long, Int>?>(null) }
+    var picker by remember { mutableStateOf(false) }
+    val room = ui.room ?: return
+    val anime = room.anime
+    val owner = vm.isOwner
+    val hasSource = !room.videoUrl.isNullOrBlank()
+
+    LaunchedEffect(controls, progress.isPlaying) {
+        if (controls && progress.isPlaying) {
+            delay(3800)
+            controls = false
+        }
+    }
+
+    fun denied() {
+        haptic(true)
+        Toast.makeText(context, "Плеером управляет хост", Toast.LENGTH_SHORT).show()
+    }
+
+    BoxWithConstraints(modifier.background(Color.Black)) {
+        val widthPx = constraints.maxWidth.toFloat()
+        PlayerSurface(vm, Modifier.fillMaxSize())
+
+        // Gestures: tap toggles controls, double-tap seeks (host).
+        Box(
+            Modifier.fillMaxSize().pointerInput(owner) {
+                detectTapGestures(
+                    onTap = { controls = !controls },
+                    onDoubleTap = { offset ->
+                        val forward = offset.x > widthPx / 2
+                        if (vm.seekBy(if (forward) 10.0 else -10.0)) {
+                            haptic(false)
+                            seekFlash = System.nanoTime() to (if (forward) 1 else -1)
+                        } else denied()
+                    },
+                )
+            },
+        )
+
+        FlyingLayer(vm, Modifier.fillMaxSize())
+        BurstLayer(vm, Modifier.align(Alignment.Center))
+
+        // double-tap ripple
+        seekFlash?.let { (key, dir) ->
+            SeekRipple(key, dir, Modifier.align(if (dir > 0) Alignment.CenterEnd else Alignment.CenterStart)) { seekFlash = null }
+        }
+
+        // Loading / empty states
+        val loadingInfo = ui.animeLoading
+        when {
+            loadingInfo != null -> SourceLoading(loadingInfo, Modifier.align(Alignment.Center))
+            !hasSource -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Mascot(MascotMood.SLEEP, size = if (isFull) 110.dp else 84.dp)
+                Spacer(Modifier.height(6.dp))
+                Text(if (owner) "Выбери, что смотрим" else "Хост ещё выбирает тайтл", color = Color.White, fontWeight = FontWeight.Bold)
+                if (owner) {
+                    Spacer(Modifier.height(10.dp))
+                    MangaButton("Выбрать аниме", { picker = true }, kind = ButtonKind.YELLOW, compact = true)
+                }
+            }
+            progress.buffering -> CircularProgressIndicator(Modifier.align(Alignment.Center).size(46.dp), color = m.red, strokeWidth = 4.dp)
+        }
+
+        // Owner paused banner for viewers
+        AnimatedVisibility(
+            ui.ownerPaused && hasSource && loadingInfo == null,
+            modifier = Modifier.align(Alignment.Center),
+            enter = scaleIn(spring(dampingRatio = 0.5f)) + fadeIn(), exit = scaleOut() + fadeOut(),
+        ) {
+            val hostName = ui.participants.firstOrNull { it.isOwner }?.username ?: "Хост"
+            MangaPanel(Modifier.rotate(-2f), color = m.yellow, shadow = 4.dp) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Pause, null, tint = m.onYellow)
+                    Spacer(Modifier.width(6.dp))
+                    Text("$hostName на паузе", color = m.onYellow, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Controls overlay
+        AnimatedVisibility(controls, enter = fadeIn(tween(180)), exit = fadeOut(tween(250)), modifier = Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxWidth().height(90.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent))))
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(110.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))))
+                // top bar
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp).then(if (isFull) Modifier.statusBarsPadding() else Modifier),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OverlayButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
+                    Spacer(Modifier.width(6.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(anime?.title ?: room.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
+                        val sub = listOfNotNull(
+                            anime?.episode?.takeIf { it > 0 }?.let { "Серия $it" + ((anime?.episodesTotal ?: 0).takeIf { t -> t > 0 }?.let { t -> " из $t" } ?: "") },
+                            anime?.translationName,
+                        ).joinToString(" · ")
+                        if (sub.isNotEmpty()) Text(sub, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
+                    }
+                    SyncBadge(ui, owner) { vm.syncToHost() }
+                }
+                // center play/pause
+                if (hasSource && ui.animeLoading == null && !progress.buffering) {
+                    val playing = progress.isPlaying || (vm.player.playWhenReady && !owner)
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .size(if (isFull) 74.dp else 62.dp)
+                            .clip(CircleShape)
+                            .background(m.red.copy(alpha = 0.92f))
+                            .border(3.dp, Color.Black, CircleShape)
+                            .clickable {
+                                haptic(false)
+                                if (!vm.togglePlay()) {
+                                    if (ui.sync?.playing == true && !progress.isPlaying) vm.syncToHost() else denied()
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnimatedContent(playing, transitionSpec = { scaleIn() + fadeIn() togetherWith scaleOut() + fadeOut() }, label = "pp") { p ->
+                            Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Пауза" else "Play", tint = Color.White, modifier = Modifier.size(36.dp))
+                        }
+                    }
+                }
+                // bottom bar
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 4.dp)
+                        .then(if (isFull) Modifier.navigationBarsPadding() else Modifier),
+                ) {
+                    SeekBar(vm, progress, owner, ::denied)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${formatTime(progress.positionSec)} / ${formatTime(progress.durationSec)}",
+                            color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
+                        )
+                        SpeedMenu(vm, progress)
+                        QualityMenu(vm, progress)
+                        OverlayButton(if (isFull) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Во весь экран", onToggleFull)
+                    }
+                }
+            }
+        }
+
+        // Skip opening / next episode chips (host)
+        val segments = anime?.skipSegments.orEmpty()
+        val opening = segments.firstOrNull()
+        val ending = segments.getOrNull(1)
+        val pos = progress.positionSec
+        val showSkip = owner && opening != null && opening.size >= 2 && pos >= opening[0] && pos < opening[1] - 1
+        val showNext = owner && ending != null && ending.size >= 2 && pos >= ending[0] && pos <= ending[1] && (anime?.episodesTotal ?: 0) > (anime?.episode ?: 0)
+        AnimatedVisibility(
+            showSkip || showNext,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = if (controls) 74.dp else 18.dp),
+            enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            MangaButton(
+                if (showSkip) "Пропустить опенинг" else "Следующая серия",
+                { haptic(false); if (showSkip) vm.skipOpening() else vm.nextEpisode() },
+                kind = ButtonKind.YELLOW, compact = true, icon = Icons.Rounded.SkipNext,
+            )
+        }
+
+        PlayerToastLayer(vm, Modifier.align(Alignment.TopCenter).padding(top = if (isFull) 64.dp else 52.dp))
+
+        if (isFull) {
+            ChatOverlay(vm, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 86.dp).widthIn(max = 320.dp))
+            Column(
+                Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AnimatedVisibility(controls, enter = slideInHorizontally { it } + fadeIn(), exit = slideOutHorizontally { it } + fadeOut()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LIVE_REACTIONS.forEach { (kind, emoji, _) ->
+                            ReactionButton(emoji, 40.dp) { haptic(false); vm.sendReaction(kind) }
+                        }
+                    }
+                }
+            }
+            EndCardOverlay(vm, ui, progress, Modifier.align(Alignment.Center))
+        }
+    }
+
+    if (picker) AnimePickerDialog(onDismiss = { picker = false }, onConfirm = { vm.setAnime(it); picker = false })
+}
+
+@Composable
+private fun OverlayButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(42.dp).clip(CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, description, tint = Color.White, modifier = Modifier.size(26.dp)) }
+}
+
+@Composable
+private fun SeekBar(vm: RoomViewModel, progress: PlayerProgress, owner: Boolean, denied: () -> Unit) {
+    val m = Manga.colors
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableFloatStateOf(0f) }
+    val duration = progress.durationSec.toFloat().coerceAtLeast(1f)
+    val value = if (dragging) dragValue else progress.positionSec.toFloat().coerceIn(0f, duration)
+    val segments = vm.ui.collectAsState().value.room?.anime?.skipSegments.orEmpty()
+    Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
+        // buffered + opening marks
+        Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth((progress.bufferedSec.toFloat() / duration).coerceIn(0f, 1f)).background(Color.White.copy(alpha = 0.35f)))
+            segments.firstOrNull()?.takeIf { it.size >= 2 }?.let { seg ->
+                Row(Modifier.fillMaxSize()) {
+                    val start = (seg[0].toFloat() / duration).coerceIn(0f, 1f)
+                    val len = ((seg[1] - seg[0]).toFloat() / duration).coerceIn(0f, 1f - start)
+                    if (start > 0f) Spacer(Modifier.weight(start))
+                    if (len > 0f) Box(Modifier.weight(len).fillMaxHeight().background(m.yellow.copy(alpha = 0.8f)))
+                    if (1f - start - len > 0.001f) Spacer(Modifier.weight(1f - start - len))
+                }
+            }
+        }
+        Slider(
+            value = value,
+            onValueChange = {
+                if (!owner) return@Slider
+                dragging = true
+                dragValue = it
+            },
+            onValueChangeFinished = {
+                if (!owner) { denied(); return@Slider }
+                vm.seekTo(dragValue.toDouble())
+                dragging = false
+            },
+            valueRange = 0f..duration,
+            colors = SliderDefaults.colors(
+                thumbColor = m.red,
+                activeTrackColor = m.red,
+                inactiveTrackColor = Color.Transparent,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (dragging) {
+            Text(
+                formatTime(dragValue.toDouble()),
+                color = Color.White, fontFamily = DisplayFont, fontSize = 14.sp,
+                modifier = Modifier.align(Alignment.TopCenter).offset(y = (-26).dp)
+                    .clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpeedMenu(vm: RoomViewModel, progress: PlayerProgress) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable { open = true }.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.Speed, "Скорость", tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(3.dp))
+            Text("${String.format(java.util.Locale.US, "%.2f", progress.speed).trimEnd('0').trimEnd('.')}×", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }) {
+            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
+                DropdownMenuItem(
+                    text = { Text("${s}×", fontWeight = if (abs(progress.speed - s) < 0.01f) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = { vm.setSpeed(s); open = false },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QualityMenu(vm: RoomViewModel, progress: PlayerProgress) {
+    var open by remember { mutableStateOf(false) }
+    val prefs by Session.appPrefs.collectAsState()
+    Box {
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable { open = true }.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.HighQuality, "Качество", tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(3.dp))
+            Text(if (progress.videoHeight > 0) "${progress.videoHeight}p" else "Авто", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        DropdownMenu(open, onDismissRequest = { open = false }) {
+            listOf("auto" to "Авто", "1080" to "1080p", "720" to "720p", "480" to "480p", "360" to "360p").forEach { (key, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontWeight = if (prefs.qualityMode == key) FontWeight.Bold else FontWeight.Normal) },
+                    onClick = {
+                        Session.updatePrefs { it.copy(qualityMode = key) }
+                        vm.applyQualityCap()
+                        open = false
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(if (prefs.dataSaver) "Экономия трафика: вкл" else "Экономия трафика: выкл") },
+                onClick = {
+                    Session.updatePrefs { it.copy(dataSaver = !it.dataSaver) }
+                    vm.applyQualityCap()
+                    open = false
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncBadge(ui: RoomUi, owner: Boolean, onSync: () -> Unit) {
+    val m = Manga.colors
+    val drift = abs(ui.driftMs)
+    val (label, color) = when {
+        ui.link != LinkStatus.CONNECTED -> "Связь…" to m.red
+        owner -> "Хост" to m.yellow
+        drift < 150 -> "Синхронно" to m.green
+        drift <= 400 -> "±${drift} мс" to m.yellow
+        else -> "Догоняем" to m.red
+    }
+    val t = rememberInfiniteTransition(label = "sync")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "spin")
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(enabled = !owner && ui.syncCooldown == 0, onClick = onSync)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (!owner && ui.link == LinkStatus.CONNECTED) {
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                Icons.Rounded.Sync, "Синхронизировать", tint = Color.White.copy(alpha = if (ui.syncCooldown > 0) 0.4f else 1f),
+                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (ui.syncCooldown > 0) spin else 0f },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceLoading(info: AnimeLoading, modifier: Modifier) {
+    val m = Manga.colors
+    MangaPanel(modifier, color = m.paper2, shadow = 4.dp) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Mascot(MascotMood.SEARCH, size = 52.dp)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    when (info.reason) {
+                        "episode" -> info.episode?.let { "Загружаю серию $it" } ?: "Загружаю серию"
+                        "retry" -> "Обновляю поток"
+                        else -> info.title?.let { "Загружаю «$it»" } ?: "Загружаю тайтл"
+                    },
+                    color = m.ink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+                space.aniroom.app.ui.components.LoaderBar(Modifier.width(140.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeekRipple(key: Long, dir: Int, modifier: Modifier, onDone: () -> Unit) {
+    val anim = remember(key) { Animatable(0f) }
+    LaunchedEffect(key) {
+        anim.animateTo(1f, tween(600, easing = FastOutSlowInEasing))
+        onDone()
+    }
+    Box(
+        modifier
+            .fillMaxHeight()
+            .width(140.dp)
+            .alpha(1f - anim.value)
+            .background(Brush.horizontalGradient(if (dir > 0) listOf(Color.Transparent, Color.White.copy(alpha = 0.18f)) else listOf(Color.White.copy(alpha = 0.18f), Color.Transparent))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(if (dir > 0) "10 ›› " else " ‹‹ 10", color = Color.White, fontFamily = DisplayFont, fontSize = 18.sp, modifier = Modifier.scale(0.8f + anim.value * 0.4f))
+    }
+}
+
+@Composable
+fun FlyingLayer(vm: RoomViewModel, modifier: Modifier) {
+    val flying by vm.flying.collectAsState()
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        flying.forEach { r ->
+            androidx.compose.runtime.key(r.id) {
+                val anim = remember { Animatable(0f) }
+                LaunchedEffect(Unit) { anim.animateTo(1f, tween(3000, easing = LinearEasing)) }
+                val t = anim.value
+                val x = w * r.lane + (sin(t * 9f + r.lane * 10f) * 18f).dp
+                val y = h - (h * 0.85f * t) - 30.dp
+                val popScale = if (t < 0.08f) t / 0.08f * 1.3f else 1.3f - (t - 0.08f) * 0.4f
+                Text(
+                    r.emoji,
+                    fontSize = if (r.mine) 34.sp else 28.sp,
+                    modifier = Modifier
+                        .offset(x = x - 16.dp, y = y)
+                        .graphicsLayer {
+                            alpha = if (t > 0.75f) (1f - t) / 0.25f else 1f
+                            scaleX = popScale
+                            scaleY = popScale
+                            rotationZ = sin(t * 7f) * 12f
+                        },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BurstLayer(vm: RoomViewModel, modifier: Modifier) {
+    val burst by vm.burst.collectAsState()
+    val m = Manga.colors
+    AnimatedVisibility(burst != null, modifier = modifier, enter = scaleIn(spring(dampingRatio = 0.35f, stiffness = 400f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
+        val b = burst
+        if (b != null) Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.rotate(-6f)) {
+            Text(
+                b.text, fontFamily = DisplayFont, fontSize = 30.sp, color = m.yellow,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp),
+            )
+            Text("${b.emoji} ×${b.count}", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+private fun PlayerToastLayer(vm: RoomViewModel, modifier: Modifier) {
+    val toast by vm.toast.collectAsState()
+    val m = Manga.colors
+    AnimatedContent(
+        toast,
+        modifier = modifier,
+        transitionSpec = { (slideInVertically { -it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) },
+        contentKey = { it?.id },
+        label = "toast",
+    ) { t ->
+        if (t != null) MangaPanel(color = m.paper2, shadow = 3.dp, radius = 14.dp) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                when (t) {
+                    is PlayerToast.Skip -> {
+                        Text("⏭", fontSize = 16.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("${t.by} пропустил опенинг" + (t.seconds?.let { " · ${it.toInt()} с" } ?: ""), color = m.ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    is PlayerToast.Episode -> {
+                        Text(if (t.loading) "⏳" else "📺", fontSize = 16.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (t.from != null && t.to != null) "Серия ${t.from} → ${t.to}" else "Серия ${t.to ?: ""}",
+                            color = m.ink, fontFamily = DisplayFont, fontSize = 13.sp,
+                        )
+                    }
+                    is PlayerToast.Info -> {
+                        Text(t.emoji, fontSize = 15.sp, color = m.red, fontWeight = FontWeight.Black)
+                        Spacer(Modifier.width(6.dp))
+                        Text(t.text, color = m.ink, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2)
+                    }
+                }
+            }
+        } else Spacer(Modifier.height(1.dp))
+    }
+}
+
+@Composable
+private fun ChatOverlay(vm: RoomViewModel, modifier: Modifier) {
+    val enabled by Session.appPrefs.collectAsState()
+    val items = remember { mutableStateListOf<Message>() }
+    LaunchedEffect(Unit) {
+        vm.incoming.collect { msg ->
+            if (!enabled.chatToasts) return@collect
+            items.add(msg)
+            if (items.size > 3) items.removeAt(0)
+            launch {
+                delay(6000)
+                items.remove(msg)
+            }
+        }
+    }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { msg ->
+            androidx.compose.runtime.key(msg.id) {
+                val appear = remember { Animatable(0f) }
+                LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.7f)) }
+                Row(
+                    Modifier
+                        .graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * -60f }
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UserAvatar(msg.avatar, msg.username, size = 24.dp, color = msg.nicknameColor, ring = false)
+                    Spacer(Modifier.width(8.dp))
+                    Text(msg.username, color = nickColor(msg.username, msg.nicknameColor), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (msg.stickerUrl != null) "стикер" else msg.text, color = Color.White, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+// --------------------------------------------------------------------------------------- below player
+
+@Composable
+private fun RoomHeader(vm: RoomViewModel, ui: RoomUi) {
+    val m = Manga.colors
+    val context = LocalContext.current
+    val room = ui.room ?: return
+    val online = ui.participants.filter { it.online }
+    val inviteUrl = "${BuildConfig.SITE_URL}/rooms/${room.roomCode}"
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val linkColor = when (ui.link) {
+                    LinkStatus.CONNECTED -> m.green
+                    LinkStatus.CONNECTING, LinkStatus.RECONNECTING -> m.yellow
+                    else -> m.red
+                }
+                val t = rememberInfiniteTransition(label = "dot")
+                val a by t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "a")
+                Box(Modifier.size(8.dp).clip(CircleShape).background(linkColor.copy(alpha = if (ui.link == LinkStatus.CONNECTED) 1f else a)))
+                Spacer(Modifier.width(6.dp))
+                Text(room.title, style = MaterialTheme.typography.titleMedium, color = m.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(
+                "${online.size} ${plural(online.size, "зритель", "зрителя", "зрителей")} · " + if (vm.isOwner) "ты хост" else "хост: ${ui.participants.firstOrNull { it.isOwner }?.username ?: "—"}",
+                color = m.muted, fontSize = 12.sp, maxLines = 1,
+            )
+        }
+        Box(Modifier.width(((online.take(4).size - 1).coerceAtLeast(0) * 18 + 30).dp).height(30.dp)) {
+            online.take(4).forEachIndexed { i, p ->
+                UserAvatar(p.avatar, p.username, size = 30.dp, color = p.nicknameColor, modifier = Modifier.offset(x = (i * 18).dp))
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        MangaPanel(color = m.yellow, radius = 12.dp, shadow = 3.dp, onClick = {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("AniRoom", inviteUrl))
+            Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+        }) {
+            Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(room.roomCode, fontFamily = DisplayFont, fontSize = 13.sp, color = m.onYellow)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Rounded.ContentCopy, "Скопировать", tint = m.onYellow, modifier = Modifier.size(14.dp))
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        RoundIcon(Icons.Rounded.Share, "Поделиться", {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Смотрим вместе в AniRoom${room.anime?.title?.let { " — $it" } ?: ""}: $inviteUrl")
+            }
+            context.startActivity(Intent.createChooser(send, "Пригласить в комнату"))
+        }, size = 36.dp)
+    }
+}
+
+@Composable
+private fun ReactionBar(vm: RoomViewModel) {
+    val haptic = rememberHaptic()
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        LIVE_REACTIONS.forEach { (kind, emoji, _) ->
+            ReactionButton(emoji, 44.dp) { haptic(false); vm.sendReaction(kind) }
+        }
+    }
+}
+
+@Composable
+private fun ReactionButton(emoji: String, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val m = Manga.colors
+    var bumps by remember { mutableStateOf(0) }
+    val scale by animateFloatAsState(if (bumps % 2 == 1) 1.25f else 1f, spring(dampingRatio = 0.3f, stiffness = 800f), label = "bump", finishedListener = { if (bumps % 2 == 1) bumps++ })
+    Box(
+        Modifier
+            .size(size)
+            .scale(scale)
+            .clip(CircleShape)
+            .background(m.paper2.copy(alpha = 0.92f))
+            .border(2.dp, m.ink, CircleShape)
+            .clickable { bumps = if (bumps % 2 == 0) bumps + 1 else bumps; onClick() },
+        contentAlignment = Alignment.Center,
+    ) { Text(emoji, fontSize = (size.value * 0.48f).sp) }
+}
+
+@Composable
+private fun ResumePrompt(vm: RoomViewModel, ui: RoomUi) {
+    val m = Manga.colors
+    AnimatedVisibility(ui.resumeAt != null) {
+        MangaPanel(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp), color = m.yellow, shadow = 3.dp) {
+            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Продолжить с ${formatTime(ui.resumeAt ?: 0.0)}?", color = m.onYellow, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                MangaButton("Нет", { vm.dismissResume() }, kind = ButtonKind.PAPER, compact = true)
+                Spacer(Modifier.width(8.dp))
+                MangaButton("Да", { vm.acceptResume() }, kind = ButtonKind.INK, compact = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoomTabs(vm: RoomViewModel, ui: RoomUi, openUser: (Int) -> Unit) {
+    val m = Manga.colors
+    val pager = rememberPagerState { 3 }
+    val scope = rememberCoroutineScope()
+    var seen by remember { mutableStateOf(ui.messages.size) }
+    LaunchedEffect(pager.currentPage, ui.messages.size) { if (pager.currentPage == 0) seen = ui.messages.size }
+    val unread = (ui.messages.size - seen).coerceAtLeast(0)
+    Column(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(44.dp)) {
+            val tabW = maxWidth / 3
+            val indicator = (pager.currentPage + pager.currentPageOffsetFraction)
+            Box(
+                Modifier.offset(x = tabW * indicator).width(tabW).fillMaxHeight().padding(3.dp)
+                    .clip(RoundedCornerShape(12.dp)).background(m.ink),
+            )
+            Row(Modifier.fillMaxSize()) {
+                listOf("Чат", "Серии", "Комната").forEachIndexed { i, label ->
+                    val selected = pager.currentPage == i
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp)).clickable { scope.launch { pager.animateScrollToPage(i) } },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, color = if (selected) m.paper else m.ink, fontWeight = FontWeight.Bold)
+                            if (i == 0 && unread > 0) {
+                                Spacer(Modifier.width(5.dp))
+                                Box(Modifier.clip(CircleShape).background(m.red).padding(horizontal = 6.dp, vertical = 1.dp)) {
+                                    Text("$unread", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(2.dp).background(m.ink.copy(alpha = 0.08f)))
+        HorizontalPager(pager, Modifier.weight(1f), beyondViewportPageCount = 1) { page ->
+            when (page) {
+                0 -> ChatPanel(vm, ui, openUser)
+                1 -> EpisodesPanel(vm, ui)
+                else -> PeoplePanel(vm, ui, openUser)
+            }
+        }
+    }
+}
+
