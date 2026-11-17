@@ -38,6 +38,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -172,10 +175,12 @@ fun GameLayer(openAchievements: () -> Unit) {
         }
     }
 
+    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     Box(Modifier.fillMaxSize()) {
         // toasts: top-right stack
         Column(
-            Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 8.dp, end = 10.dp).widthIn(max = 340.dp),
+            Modifier.align(Alignment.TopEnd).statusBarsPadding().displayCutoutPadding()
+                .padding(top = if (landscape) 56.dp else 8.dp, end = 10.dp).widthIn(max = 340.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
@@ -188,7 +193,8 @@ fun GameLayer(openAchievements: () -> Unit) {
                     a,
                     onDismiss = { achievements.remove(a) },
                     onOpen = { achievements.remove(a); openAchievements() },
-                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp, start = 12.dp, end = 12.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().displayCutoutPadding()
+                        .padding(top = 12.dp, start = 12.dp, end = 12.dp).widthIn(max = if (landscape) 440.dp else 600.dp),
                 )
             }
         }
@@ -593,6 +599,7 @@ private fun LevelUpOverlay(event: GameEvent.LevelUp, onClose: () -> Unit, onWear
     val m = Manga.colors
     val e = event.event
     val user by Session.user.collectAsState()
+    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val stamp = rememberStamp()
     val shake = rememberShake(true)
     var showTo by remember { mutableStateOf(false) }
@@ -613,66 +620,84 @@ private fun LevelUpOverlay(event: GameEvent.LevelUp, onClose: () -> Unit, onWear
         Rays(Modifier.size(520.dp), m.yellow.copy(alpha = 0.35f))
         Confetti(Modifier.fillMaxSize(), count = 44, delayMs = 300)
         MangaPanel(
-            Modifier.padding(24.dp).widthIn(max = 380.dp).stamp(stamp, shake)
+            Modifier.padding(if (landscape) 12.dp else 24.dp).widthIn(max = if (landscape) 680.dp else 380.dp).stamp(stamp, shake)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
             color = m.paper2, radius = 22.dp, shadow = 7.dp,
         ) {
-            Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "ДЗЫНЬ!", fontFamily = DisplayFont, fontSize = 22.sp, color = m.red,
-                    modifier = Modifier.graphicsLayer { scaleX = sfx.value; scaleY = sfx.value; rotationZ = -8f },
-                )
-                Text("НОВЫЙ УРОВЕНЬ", style = Kicker, color = m.muted)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${e.fromLevel}", fontFamily = DisplayFont, fontSize = 30.sp, color = m.muted, modifier = Modifier.graphicsLayer { alpha = if (showTo) 0.45f else 1f })
-                    Text("  →  ", fontFamily = DisplayFont, fontSize = 18.sp, color = m.muted)
-                    AnimatedContent(
-                        showTo,
-                        transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) },
-                        label = "lvl",
-                    ) { visible ->
-                        Box(
-                            Modifier.size(78.dp).clip(CircleShape).background(if (visible) m.yellow else m.paper3).border(3.dp, m.ink, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(if (visible) "${e.level}" else "?", fontFamily = DisplayFont, fontSize = 32.sp, color = m.onYellow) }
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                ProgressLine(bar.value, Modifier.fillMaxWidth(), height = 10.dp)
-                Text(
-                    if (e.toNext > 0) "До ${e.level + 1} уровня — ${e.toNext} опыта" else "Максимальный уровень!",
-                    color = m.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
-                )
-                val unlocked = e.unlocked.take(6)
-                if (unlocked.isNotEmpty()) {
-                    Spacer(Modifier.height(14.dp))
-                    Text("ОТКРЫТО", style = Kicker, color = m.red)
-                    Spacer(Modifier.height(6.dp))
-                    unlocked.forEachIndexed { i, item ->
-                        val appear = remember { Animatable(0f) }
-                        LaunchedEffect(Unit) { delay(700L + i * 120L); appear.animateTo(1f, spring(dampingRatio = 0.55f)) }
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp).graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * 60f },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(Modifier.width(56.dp).height(44.dp), contentAlignment = Alignment.Center) { UnlockPreview(item, user?.username ?: "Ник") }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(item.name, color = m.ink, fontWeight = FontWeight.Bold)
-                                Text(
-                                    when (item.kind) { "frame" -> "Рамка аватара"; "bubble" -> "Облачко чата"; "nick_fx" -> "Эффект ника"; else -> "Титул" },
-                                    color = m.muted, fontSize = 11.sp,
-                                )
-                            }
+            val unlocked = e.unlocked.take(6)
+            val header: @Composable () -> Unit = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "ДЗЫНЬ!", fontFamily = DisplayFont, fontSize = 22.sp, color = m.red,
+                        modifier = Modifier.graphicsLayer { scaleX = sfx.value; scaleY = sfx.value; rotationZ = -8f },
+                    )
+                    Text("НОВЫЙ УРОВЕНЬ", style = Kicker, color = m.muted)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${e.fromLevel}", fontFamily = DisplayFont, fontSize = 30.sp, color = m.muted, modifier = Modifier.graphicsLayer { alpha = if (showTo) 0.45f else 1f })
+                        Text("  →  ", fontFamily = DisplayFont, fontSize = 18.sp, color = m.muted)
+                        AnimatedContent(
+                            showTo,
+                            transitionSpec = { (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut()) },
+                            label = "lvl",
+                        ) { visible ->
+                            Box(
+                                Modifier.size(78.dp).clip(CircleShape).background(if (visible) m.yellow else m.paper3).border(3.dp, m.ink, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(if (visible) "${e.level}" else "?", fontFamily = DisplayFont, fontSize = 32.sp, color = m.onYellow) }
                         }
                     }
+                    Spacer(Modifier.height(14.dp))
+                    ProgressLine(bar.value, Modifier.width(260.dp), height = 10.dp)
+                    Text(
+                        if (e.toNext > 0) "До ${e.level + 1} уровня — ${e.toNext} опыта" else "Максимальный уровень!",
+                        color = m.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
+                    )
                 }
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (unlocked.isNotEmpty()) MangaButton("Надеть", onWear, kind = ButtonKind.YELLOW, compact = true)
-                    MangaButton("Отлично!", onClose, compact = true)
+            }
+            val rest: @Composable () -> Unit = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (unlocked.isNotEmpty()) {
+                        Text("ОТКРЫТО", style = Kicker, color = m.red)
+                        Spacer(Modifier.height(6.dp))
+                        unlocked.forEachIndexed { i, item ->
+                            val appear = remember { Animatable(0f) }
+                            LaunchedEffect(Unit) { delay(700L + i * 120L); appear.animateTo(1f, spring(dampingRatio = 0.55f)) }
+                            Row(
+                                Modifier.width(260.dp).padding(vertical = 4.dp).graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * 60f },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(Modifier.width(56.dp).height(44.dp), contentAlignment = Alignment.Center) { UnlockPreview(item, user?.username ?: "Ник") }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(item.name, color = m.ink, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        when (item.kind) { "frame" -> "Рамка аватара"; "bubble" -> "Облачко чата"; "nick_fx" -> "Эффект ника"; else -> "Титул" },
+                                        color = m.muted, fontSize = 11.sp,
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (unlocked.isNotEmpty()) MangaButton("Надеть", onWear, kind = ButtonKind.YELLOW, compact = true)
+                        MangaButton("Отлично!", onClose, compact = true)
+                    }
                 }
+            }
+            // Fullscreen video is landscape: lay the panel out side by side so nothing gets cut off.
+            if (landscape) {
+                Row(
+                    Modifier.padding(18.dp).verticalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                ) { header(); rest() }
+            } else {
+                Column(
+                    Modifier.padding(22.dp).verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) { header(); Spacer(Modifier.height(14.dp)); rest() }
             }
         }
     }
