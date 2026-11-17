@@ -897,6 +897,34 @@ class RoomViewModel(app: Application, val roomCode: String) : AndroidViewModel(a
 
     fun dismissResume() = _ui.update { it.copy(resumeAt = null) }
 
+    private var pausedByBackground = false
+
+    /** App left without PiP: stop the sound locally (the room keeps going). */
+    fun onBackground() {
+        if (!player.playWhenReady) return
+        pausedByBackground = true
+        player.pause()
+        publishProgress()
+    }
+
+    /** Back in the app: the host resumes where they were, viewers jump to the room's moment. */
+    fun onForeground() {
+        if (!pausedByBackground) return
+        pausedByBackground = false
+        if (isOwner) {
+            // The room kept its clock running while the host was away: rejoin it there.
+            if (_ui.value.sync?.playing == true) {
+                player.seekTo((currentTargetTime() * 1000).toLong())
+                player.play()
+            }
+        } else {
+            correcting = false
+            lastAlignedKey = null
+            applySync()
+        }
+        publishProgress()
+    }
+
     // ------------------------------------------------------------------ chat
 
     fun sendMessage(text: String, replyTo: Message?) {

@@ -140,6 +140,12 @@ import space.aniroom.app.ui.theme.Kicker
 import space.aniroom.app.ui.theme.Manga
 import space.aniroom.app.util.PipState
 import space.aniroom.app.util.RoomLinks
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.rounded.Close
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -183,11 +189,36 @@ fun RoomScreen(code: String, onBack: () -> Unit, openUser: (Int) -> Unit) {
         } else controller.show(WindowInsetsCompat.Type.systemBars())
     }
     // Keep screen awake while watching; allow PiP while playing.
-    DisposableEffect(progress.isPlaying) {
+    DisposableEffect(progress.isPlaying, vm.isOwner) {
         view.keepScreenOn = progress.isPlaying
-        PipState.update(activity, progress.isPlaying && Session.appPrefs.value.autoPip)
+        PipState.update(activity, progress.isPlaying && Session.appPrefs.value.autoPip, progress.isPlaying, vm.isOwner)
         onDispose { view.keepScreenOn = false }
     }
+    // PiP window buttons → room actions
+    DisposableEffect(vm) {
+        PipState.onAction = { action ->
+            when (action) {
+                PipState.ACTION_TOGGLE -> if (!vm.togglePlay()) vm.syncToHost()
+                PipState.ACTION_SYNC -> vm.syncToHost()
+                PipState.ACTION_REACT -> vm.sendReaction("fire")
+            }
+        }
+        onDispose { PipState.onAction = null }
+    }
+    // Leaving the app without PiP (or closing the PiP window) pauses locally; coming back re-syncs.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, vm) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> if (activity?.isInPictureInPictureMode != true) vm.onBackground()
+                Lifecycle.Event.ON_START -> vm.onForeground()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(vm) { PipState.dismissed.collect { vm.onBackground() } }
     LaunchedEffect(Unit) {
         vm.events.collect { event ->
             if (event.startsWith("kicked:")) {
@@ -245,7 +276,7 @@ fun RoomScreen(code: String, onBack: () -> Unit, openUser: (Int) -> Unit) {
 
     if (isFull) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            PlayerArea(vm, ui, progress, isFull = true, onToggleFull = ::exitFull, onBack = ::exitFull, modifier = Modifier.fillMaxSize())
+            PlayerArea(vm, ui, progress, isFull = true, onToggleFull = ::exitFull, onBack = ::exitFull, modifier = Modifier.fillMaxSize(), openUser = openUser)
         }
         return
     }
@@ -299,7 +330,13 @@ private fun PlayerArea(
     onToggleFull: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier,
+    openUser: (Int) -> Unit = {},
 ) {
+    var chatOpen by rememberSaveable { mutableStateOf(false) }
+    var chatSeen by remember { mutableStateOf(ui.messages.size) }
+    LaunchedEffect(chatOpen, ui.messages.size) { if (chatOpen) chatSeen = ui.messages.size }
+    val chatUnread = (ui.messages.size - chatSeen).coerceAtLeast(0)
+    BackHandler(chatOpen) { chatOpen = false }
     val m = Manga.colors
     val context = LocalContext.current
     val haptic = rememberHaptic()
@@ -404,6 +441,10 @@ private fun PlayerArea(
                         if (sub.isNotEmpty()) Text(sub, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1)
                     }
                     SyncBadge(ui, owner) { vm.syncToHost() }
+                    if (PipState.supported(LocalContext.current)) {
+                        Spacer(Modifier.width(4.dp))
+                        OverlayButton(Icons.Rounded.PictureInPictureAlt, "Картинка в картинке") { PipState.enter(context.findActivity(), progress.isPlaying, owner) }
+                    }
                 }
                 // center play/pause
                 if (hasSource && ui.animeLoading == null && !progress.buffering) {
@@ -441,6 +482,12 @@ private fun PlayerArea(
                         )
                         SpeedMenu(vm, progress)
                         QualityMenu(vm, progress)
+                        if (isFull) Box {
+                            OverlayButton(Icons.AutoMirrored.Rounded.Chat, "Чат") { chatOpen = !chatOpen }
+                            if (chatUnread > 0 && !chatOpen) Box(
+                                Modifier.align(Alignment.TopEnd).clip(CircleShape).background(m.red).padding(horizontal = 5.dp),
+                            ) { Text(if (chatUnread > 9) "9+" else "$chatUnread", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                        }
                         OverlayButton(if (isFull) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Во весь экран", onToggleFull)
                     }
                 }
@@ -469,7 +516,7 @@ private fun PlayerArea(
         PlayerToastLayer(vm, Modifier.align(Alignment.TopCenter).padding(top = if (isFull) 64.dp else 52.dp))
 
         if (isFull) {
-            ChatOverlay(vm, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 86.dp).widthIn(max = 320.dp))
+            if (!chatOpen) ChatOverlay(ui, Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = if (controls) 96.dp else 24.dp).widthIn(max = 340.dp).navigationBarsPadding())
             Column(
                 Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -483,6 +530,7 @@ private fun PlayerArea(
                 }
             }
             EndCardOverlay(vm, ui, progress, Modifier.align(Alignment.Center))
+            FullscreenChat(vm, ui, chatOpen, { chatOpen = false }, openUser, Modifier.align(Alignment.CenterEnd))
         }
     }
 
@@ -773,16 +821,21 @@ private fun PlayerToastLayer(vm: RoomViewModel, modifier: Modifier) {
 }
 
 @Composable
-private fun ChatOverlay(vm: RoomViewModel, modifier: Modifier) {
-    val enabled by Session.appPrefs.collectAsState()
+private fun ChatOverlay(ui: RoomUi, modifier: Modifier) {
+    val prefs by Session.appPrefs.collectAsState()
+    val me = Session.user.collectAsState().value?.id
     val items = remember { mutableStateListOf<Message>() }
-    LaunchedEffect(Unit) {
-        vm.incoming.collect { msg ->
-            if (!enabled.chatToasts) return@collect
+    // Everything already in the room when fullscreen opened counts as read.
+    val seen = remember { mutableSetOf<Long>().apply { ui.messages.forEach { add(it.id) } } }
+    LaunchedEffect(ui.messages) {
+        val fresh = ui.messages.filter { it.id > 0 && it.id !in seen }
+        fresh.forEach { seen += it.id }
+        if (!prefs.chatToasts) return@LaunchedEffect
+        fresh.filter { it.userId != me }.forEach { msg ->
             items.add(msg)
-            if (items.size > 3) items.removeAt(0)
+            while (items.size > 4) items.removeAt(0)
             launch {
-                delay(6000)
+                delay(7000)
                 items.remove(msg)
             }
         }
@@ -791,22 +844,58 @@ private fun ChatOverlay(vm: RoomViewModel, modifier: Modifier) {
         items.forEach { msg ->
             androidx.compose.runtime.key(msg.id) {
                 val appear = remember { Animatable(0f) }
-                LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.7f)) }
+                LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 500f)) }
                 Row(
                     Modifier
-                        .graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * -60f }
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .graphicsLayer { alpha = appear.value; translationX = (1f - appear.value) * -80f; scaleX = 0.9f + appear.value * 0.1f; scaleY = scaleX }
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black.copy(alpha = 0.62f))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    UserAvatar(msg.avatar, msg.username, size = 24.dp, color = msg.nicknameColor, ring = false)
+                    UserAvatar(msg.avatar, msg.username, size = 26.dp, color = msg.nicknameColor, ring = false)
                     Spacer(Modifier.width(8.dp))
-                    Text(msg.username, color = nickColor(msg.username, msg.nicknameColor), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (msg.stickerUrl != null) "стикер" else msg.text, color = Color.White, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Column {
+                        Text(msg.username, color = nickColor(msg.username, msg.nicknameColor), fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                        if (msg.stickerUrl != null) {
+                            coil.compose.AsyncImage(
+                                model = space.aniroom.app.data.Api.media(msg.stickerUrl), contentDescription = "Стикер",
+                                modifier = Modifier.size(56.dp),
+                            )
+                        } else {
+                            Text(msg.text, color = Color.White, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+/** Slide-in chat drawer for fullscreen: read and reply without leaving the video. */
+@Composable
+private fun FullscreenChat(vm: RoomViewModel, ui: RoomUi, open: Boolean, onClose: () -> Unit, openUser: (Int) -> Unit, modifier: Modifier) {
+    val m = Manga.colors
+    AnimatedVisibility(
+        open, modifier = modifier,
+        enter = slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = 500f)) { it } + fadeIn(),
+        exit = slideOutHorizontally { it } + fadeOut(),
+    ) {
+        Column(
+            Modifier.fillMaxHeight().width(360.dp)
+                .background(m.paper.copy(alpha = 0.96f))
+                .border(2.dp, m.ink)
+                .navigationBarsPadding().imePadding(),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("ЧАТ", style = Kicker, color = m.red, modifier = Modifier.weight(1f))
+                Text("${ui.participants.count { it.online }} в комнате", color = m.muted, fontSize = 12.sp)
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Close, "Закрыть чат", tint = m.ink)
+                }
+            }
+            Box(Modifier.weight(1f)) { ChatPanel(vm, ui, openUser) }
         }
     }
 }

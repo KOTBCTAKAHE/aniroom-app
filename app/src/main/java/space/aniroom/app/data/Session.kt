@@ -51,7 +51,7 @@ object Session {
         _appPrefs.value = AppPrefs(
             theme = runCatching { ThemeMode.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM),
             reactions = prefs.getBoolean("reactions", true),
-            chatToasts = prefs.getBoolean("chatToasts", true),
+            chatToasts = if (prefs.getBoolean("chatToastsMigrated", false)) prefs.getBoolean("chatToasts", true) else true.also { prefs.edit().putBoolean("chatToastsMigrated", true).putBoolean("chatToasts", true).apply() },
             autoSkipOpening = prefs.getBoolean("autoSkipOpening", false),
             haptics = prefs.getBoolean("haptics", true),
             autoPip = prefs.getBoolean("autoPip", true),
@@ -115,7 +115,6 @@ object Session {
             p.copy(
                 theme = when (str("theme")) { "light" -> ThemeMode.LIGHT; "sepia" -> ThemeMode.SEPIA; "dark" -> ThemeMode.DARK; "system" -> ThemeMode.SYSTEM; else -> p.theme },
                 reactions = bool("reactions") ?: p.reactions,
-                chatToasts = bool("chatToasts") ?: p.chatToasts,
                 autoSkipOpening = bool("autoSkipOpening") ?: p.autoSkipOpening,
                 chatFont = str("chatFont") ?: p.chatFont,
                 preferredDub = str("preferredDub") ?: p.preferredDub,

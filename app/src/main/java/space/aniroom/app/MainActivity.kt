@@ -89,15 +89,38 @@ class MainActivity : ComponentActivity() {
         if (!code.isNullOrBlank()) PendingNav.room.value = code
     }
 
+    private val pipReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            val action = intent?.getIntExtra(PipState.EXTRA, 0) ?: return
+            PipState.onAction?.invoke(action)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, pipReceiver, android.content.IntentFilter(PipState.BROADCAST), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(pipReceiver) }
+        super.onDestroy()
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && PipState.eligible && Session.appPrefs.value.autoPip) {
-            runCatching { enterPictureInPictureMode(PipState.params(false)) }
+            runCatching { enterPictureInPictureMode(PipState.params(this, false)) }
         }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipState.inPip.value = isInPictureInPictureMode
+        // Leaving PiP while not visible means the user closed the PiP window.
+        if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+            PipState.dismissed.tryEmit(Unit)
+        }
     }
 }
