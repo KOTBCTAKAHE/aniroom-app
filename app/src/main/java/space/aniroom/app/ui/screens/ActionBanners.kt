@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -163,7 +164,7 @@ private fun SkipBanner(t: PlayerToast.Skip, isFull: Boolean, modifier: Modifier)
                     .drawBehind {
                         val o = 5.dp.toPx()
                         val outline = shape.createOutline(size, layoutDirection, this)
-                        androidx.compose.ui.graphics.drawscope.translate(o, o) { drawOutline(outline, Ink) }
+                        translate(o, o) { drawOutline(outline, Ink) }
                     }
                     .clip(shape)
                     .background(Paper)
