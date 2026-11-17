@@ -36,6 +36,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1021,7 +1022,7 @@ private fun SwipeAdjustLayer(modifier: Modifier, tapGestures: Modifier) {
         Box(
             Modifier.fillMaxSize().then(tapGestures).pointerInput(Unit) {
                 var left = false
-                androidx.compose.foundation.gestures.detectVerticalDragGestures(
+                detectVerticalDragGestures(
                     onDragStart = { offset -> left = offset.x < w / 2 },
                     onVerticalDrag = { change, drag ->
                         change.consume()
