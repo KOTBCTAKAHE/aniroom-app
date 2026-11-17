@@ -247,7 +247,6 @@ fun UserAvatar(
             .size(size)
             .clip(shape)
             .background(nickColor(name, color))
-            .then(if (ring) Modifier.border(2.dp, m.ink, shape) else Modifier)
         val media = Api.media(url)
         if (media != null) {
             SubcomposeAsyncImage(
@@ -258,9 +257,13 @@ fun UserAvatar(
                 error = { Initials(name, size) },
                 loading = { Initials(name, size) },
             )
+            // Video avatars (MP4/WebM, allowed on the site) play muted and looped when big enough;
+            // small ones show their first frame.
+            if (Api.isVideo(media) && size >= 56.dp) VideoAvatar(media, Modifier.size(size).clip(shape))
         } else {
             Box(base, contentAlignment = Alignment.Center) { Initials(name, size) }
         }
+        if (ring) Box(Modifier.size(size).border(2.dp, m.ink, shape))
         if (online != null) {
             Box(
                 Modifier
@@ -463,3 +466,34 @@ fun animatedDp(target: Dp): Dp {
 
 @Suppress("unused")
 val NoShape: Shape = RoundedCornerShape(0.dp)
+
+@Composable
+private fun VideoAvatar(url: String, modifier: Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = androidx.compose.runtime.remember(url) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context)
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(space.aniroom.app.AniRoomApp.http),
+                ),
+            )
+            .build().apply {
+                volume = 0f
+                repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
+                prepare()
+                playWhenReady = true
+            }
+    }
+    androidx.compose.runtime.DisposableEffect(player) { onDispose { player.release() } }
+    androidx.compose.ui.viewinterop.AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            (android.view.LayoutInflater.from(ctx).inflate(space.aniroom.app.R.layout.player_texture, null) as androidx.media3.ui.PlayerView).apply {
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                this.player = player
+            }
+        },
+        onRelease = { it.player = null },
+    )
+}

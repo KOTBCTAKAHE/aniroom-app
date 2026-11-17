@@ -123,6 +123,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("io.coil-kt:coil-gif:2.7.0")
+    implementation("io.coil-kt:coil-video:2.7.0")
     implementation("io.socket:socket.io-client:2.1.1") {
         exclude(group = "org.json", module = "json")
     }

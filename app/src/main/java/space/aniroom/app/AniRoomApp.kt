@@ -63,6 +63,8 @@ class AniRoomApp : Application(), ImageLoaderFactory {
         .diskCache { DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(120L * 1024 * 1024).build() }
         .components {
             if (Build.VERSION.SDK_INT >= 28) add(ImageDecoderDecoder.Factory()) else add(GifDecoder.Factory())
+            // Video avatars / stickers (MP4, WebM) show their first frame wherever they can't play.
+            add(coil.decode.VideoFrameDecoder.Factory())
         }
         .crossfade(220)
         .respectCacheHeaders(false)

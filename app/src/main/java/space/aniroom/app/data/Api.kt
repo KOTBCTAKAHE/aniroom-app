@@ -151,13 +151,27 @@ object Api {
 
     /** Absolute URL for media the API returns as a path. */
     fun media(url: String?): String? {
-        if (url.isNullOrBlank()) return null
+        val raw = url?.trim()
+        if (raw.isNullOrBlank() || raw == "null") return null
         return when {
-            url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") -> url
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> "$baseUrl$url"
-            else -> url
+            raw.startsWith("data:") || raw.startsWith("content:") || raw.startsWith("file:") -> raw
+            // Direct links to the origin server (plain http / bare IP) → go through the HTTPS proxy instead.
+            raw.startsWith("http://") -> {
+                val uri = runCatching { java.net.URI(raw) }.getOrNull()
+                val path = uri?.rawPath.orEmpty() + (uri?.rawQuery?.let { "?$it" } ?: "")
+                if (uri != null && path.isNotEmpty()) "$baseUrl$path" else raw.replaceFirst("http://", "https://")
+            }
+            raw.startsWith("https://") -> raw
+            raw.startsWith("//") -> "https:$raw"
+            raw.startsWith("/") -> "$baseUrl$raw"
+            else -> "$baseUrl/$raw"
         }
+    }
+
+    fun isVideo(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val clean = url.substringBefore('?').lowercase()
+        return clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".mov") || clean.endsWith(".m4v") || url.startsWith("data:video/")
     }
 }
 
